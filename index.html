@@ -150,12 +150,23 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
     <div class="field"><label for="sFirst">First pay date</label><input id="sFirst" type="date" required></div>
     <div class="field"><label for="sStart">Starting savings balance (CAD)</label><input id="sStart" type="text" inputmode="decimal" placeholder="0.00"></div>
     <button type="submit" class="primary">Save settings</button>
+    <button type="button" class="secondary" id="btnXlsxIn">Import from Excel (.xlsx)</button>
+    <input type="file" id="xlsxFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
     <button type="button" class="secondary" id="btnXlsx">Export to Excel (.xlsx)</button>
     <button type="button" class="secondary" id="btnExport">Export backup (JSON)</button>
     <button type="button" class="secondary" id="btnImport">Import backup (JSON)</button>
     <input type="file" id="importFile" accept="application/json,.json" hidden>
     <button type="button" class="danger" id="btnClear">Erase all data</button>
   </form>
+</div>
+<div class="overlay" id="xlOv">
+  <div class="sheet">
+    <div class="sheet-h"><button type="button" class="iconbtn" data-close>Cancel</button><h3>Import from Excel</h3><span style="width:60px"></span></div>
+    <div class="field" id="xlSummary" style="padding:12px 14px;font-size:15px"></div>
+    <button type="button" class="primary" id="xlReplace">Replace all entries</button>
+    <button type="button" class="secondary" id="xlMerge">Merge with current entries</button>
+    <p class="note">Merge updates items with the same pay date and name, and keeps everything else. Both options also apply the starting balance and pay schedule from the file.</p>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -165,7 +176,7 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
 var KEY='cashflow.v1';
 var DEFAULT_SETTINGS={frequency:'biweekly',firstPayDate:'2026-10-15',startingBalance:0};
 var CATS={income:['Salary','Bonus','Side income','Refund','Gift','Other'],
-          expense:['Rent/Mortgage','Groceries','Utilities','Transport','Dining','Shopping','Bills','Health','Entertainment','Debt','Other']};
+          expense:['Fixed','Variable','Rent/Mortgage','Groceries','Utilities','Transport','Dining','Shopping','Bills','Health','Entertainment','Debt','Other']};
 var money=new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'});
 var dfLong=new Intl.DateTimeFormat('en-CA',{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 var dfShort=new Intl.DateTimeFormat('en-CA',{month:'short',day:'numeric',timeZone:'UTC'});
@@ -180,12 +191,21 @@ function normalize(d){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(s.firstPayDate))s.firstPayDate=DEFAULT_SETTINGS.firstPayDate;
   if(['weekly','biweekly','semimonthly','monthly'].indexOf(s.frequency)<0)s.frequency='biweekly';
   var entries=(d.entries||[]).filter(function(e){return e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&isFinite(Number(e.amount));})
-    .map(function(e){return {id:String(e.id||uid()),type:e.type==='income'?'income':'expense',amount:Math.round(Math.abs(Number(e.amount))*100)/100,
-      description:String(e.description||''),category:String(e.category||''),date:e.date,createdAt:e.createdAt||Date.now()};});
+    .map(function(e){var o={id:String(e.id||uid()),type:e.type==='income'?'income':'expense',amount:r6(Math.abs(Number(e.amount))),
+      description:String(e.description||''),category:String(e.category||''),date:e.date,createdAt:e.createdAt||Date.now()};
+      // optional fields added for Excel sync (older data simply lacks them)
+      if(e.note)o.note=String(e.note);
+      if(['start','income','fixed','variable'].indexOf(e.section)>=0)o.section=e.section;
+      if(isFinite(Number(e.order))&&e.order!==null&&e.order!=='')o.order=Number(e.order);
+      if(e.formula&&/^[\d.+\-*\/() ]+$/.test(e.formula))o.formula=String(e.formula);
+      if(e.source)o.source=String(e.source);
+      return o;});
   return {settings:s,entries:entries};
 }
 var state=load();
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function r6(n){return Math.round(n*1e6)/1e6;}
+function amtStr(a){return Math.abs(a*100-Math.round(a*100))>1e-6?String(r6(a)):a.toFixed(2);}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
 
 // ---- dates (all as UTC-midnight to avoid DST issues) ----
@@ -241,7 +261,7 @@ function compute(){
   periods.forEach(function(p){
     p.income=Math.round(p.income*100)/100;p.expense=Math.round(p.expense*100)/100;
     p.net=Math.round((p.income-p.expense)*100)/100;run=Math.round((run+p.net)*100)/100;p.running=run;
-    p.entries.sort(function(a,b){return b.date.localeCompare(a.date)||b.createdAt-a.createdAt;});
+    p.entries.sort(function(a,b){var oa=isFinite(a.order)?a.order:1e9,ob=isFinite(b.order)?b.order:1e9;return b.date.localeCompare(a.date)||oa-ob||b.createdAt-a.createdAt;});
   });
   return {periods:periods,curIdx:curIdx,maxIdx:maxIdx};
 }
@@ -279,9 +299,9 @@ function render(){
       var inc=e.type==='income';
       html+='<div class="entry" data-id="'+esc(e.id)+'"><div class="dot '+(inc?'inc':'exp')+'">'+(inc?'+':'−')+'</div>'+
         '<div class="meta"><div class="desc">'+esc(e.description||(inc?'Income':'Expense'))+'</div><div class="small">'+
-        '<span class="tag '+(inc?'inc':'exp')+'">'+(inc?'Income':'Expense')+'</span>'+dfShort.format(parse(e.date))+(e.category?' · '+esc(e.category):'')+'</div></div>'+
+        '<span class="tag '+(inc?'inc':'exp')+'">'+(inc?'Income':'Expense')+'</span>'+dfShort.format(parse(e.date))+(e.category?' · '+esc(e.category):'')+(e.note?' · '+esc(e.note):'')+'</div></div>'+
         '<label class="amtwrap"><span class="sign '+(inc?'pos':'neg')+'">'+(inc?'+$':'−$')+'</span>'+
-        '<input class="amt-in '+(inc?'pos':'neg')+'" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="Amount for '+esc(e.description||e.type)+'" data-amt="'+esc(e.id)+'" value="'+e.amount.toFixed(2)+'"></label>'+
+        '<input class="amt-in '+(inc?'pos':'neg')+'" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="Amount for '+esc(e.description||e.type)+'" data-amt="'+esc(e.id)+'" value="'+amtStr(e.amount)+'"></label>'+
         '<button class="edit" type="button" data-edit="'+esc(e.id)+'" aria-label="Edit or delete entry">✎</button></div>';
     });
     html+='</div></div>';
@@ -300,14 +320,14 @@ var pList=document.getElementById('periods');
 pList.addEventListener('focusin',function(ev){var t=ev.target;if(t.matches&&t.matches('[data-amt]'))setTimeout(function(){try{t.select();}catch(e){}},0);});
 pList.addEventListener('keydown',function(ev){var t=ev.target;if(!t.matches('[data-amt]'))return;
   if(ev.key==='Enter'){ev.preventDefault();t.blur();}
-  else if(ev.key==='Escape'){var e0=state.entries.filter(function(x){return x.id===t.getAttribute('data-amt');})[0];if(e0)t.value=e0.amount.toFixed(2);t.blur();}});
+  else if(ev.key==='Escape'){var e0=state.entries.filter(function(x){return x.id===t.getAttribute('data-amt');})[0];if(e0)t.value=amtStr(e0.amount);t.blur();}});
 pList.addEventListener('change',function(ev){
   var t=ev.target;if(!t.matches('[data-amt]'))return;
   var id=t.getAttribute('data-amt'),e=state.entries.filter(function(x){return x.id===id;})[0];if(!e)return;
   var v=parseAmt(t.value);
-  if(!isFinite(v)||v<=0){t.value=e.amount.toFixed(2);toast('Amount must be greater than 0');return;}
-  v=Math.abs(v);if(v===e.amount){t.value=v.toFixed(2);return;}
-  e.amount=v;save();
+  if(!isFinite(v)||v<=0){t.value=amtStr(e.amount);toast('Amount must be greater than 0');return;}
+  v=Math.abs(v);if(Math.abs(v-e.amount)<1e-9){t.value=amtStr(e.amount);return;}
+  e.amount=v;delete e.formula;save();
   // re-render after focus has moved, then restore focus/caret to whichever amount field the user tapped next
   setTimeout(function(){
     var a=document.activeElement,nextId=a&&a.matches&&a.matches('[data-amt]')?a.getAttribute('data-amt'):null,nextVal=nextId?a.value:null;
@@ -322,7 +342,8 @@ var entryOv=document.getElementById('entryOv'),setOv=document.getElementById('se
 var curType='income',editingId=null;
 function show(ov){ov.classList.add('show');}
 function hide(ov){ov.classList.remove('show');if(document.activeElement)document.activeElement.blur();}
-[entryOv,setOv].forEach(function(ov){
+var xlOv=document.getElementById('xlOv');
+[entryOv,setOv,xlOv].forEach(function(ov){
   ov.addEventListener('click',function(e){if(e.target===ov||e.target.hasAttribute('data-close'))hide(ov);});
 });
 function setType(t){curType=t;
@@ -340,7 +361,7 @@ function openEntry(type,id){
   editingId=id||null;
   var e=id?state.entries.filter(function(x){return x.id===id;})[0]:null;
   document.getElementById('entryTitle').textContent=e?'Edit entry':'New entry';
-  document.getElementById('fAmount').value=e?e.amount.toFixed(2):'';
+  document.getElementById('fAmount').value=e?amtStr(e.amount):'';
   document.getElementById('fDesc').value=e?e.description:'';
   document.getElementById('fCat').value=e?e.category:'';
   document.getElementById('fDate').value=e?e.date:todayISO();
@@ -350,14 +371,14 @@ function openEntry(type,id){
 }
 document.getElementById('addInc').onclick=function(){openEntry('income');};
 document.getElementById('addExp').onclick=function(){openEntry('expense');};
-function parseAmt(s){s=String(s).replace(/[$,\s]/g,'');if(s==='')return NaN;return Math.round(Number(s)*100)/100;}
+function parseAmt(s){s=String(s).replace(/[$,\s]/g,'');if(s==='')return NaN;return r6(Number(s));}
 document.getElementById('entryForm').addEventListener('submit',function(ev){
   ev.preventDefault();
   var amt=parseAmt(document.getElementById('fAmount').value),date=document.getElementById('fDate').value;
   if(!isFinite(amt)||amt<=0){toast('Enter an amount greater than 0');return;}
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){toast('Pick a date');return;}
   var data={type:curType,amount:Math.abs(amt),description:document.getElementById('fDesc').value.trim(),category:document.getElementById('fCat').value.trim(),date:date};
-  if(editingId){state.entries=state.entries.map(function(x){return x.id===editingId?Object.assign({},x,data):x;});}
+  if(editingId){state.entries=state.entries.map(function(x){if(x.id!==editingId)return x;var n=Object.assign({},x,data);if(Math.abs(n.amount-x.amount)>1e-9)delete n.formula;if(n.type!==x.type)delete n.section;return n;});}
   else{data.id=uid();data.createdAt=Date.now();state.entries.push(data);}
   openSet[periodIndexFor(date)]=true;
   save();hide(entryOv);render();toast(editingId?'Entry updated':'Entry added');
@@ -431,7 +452,7 @@ function xesc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&am
 function colName(i){var s='';i++;while(i>0){var m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
 function serial(t){return Math.round((t-Date.UTC(1899,11,30))/86400000);}
 // cell spec: {v, t:'s'|'n'|'d'|'m'} ; style 1=date 2=money 3=header
-function sheetXml(rows,widths){
+function sheetXml(rows,widths,merges){
   var x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
   widths.forEach(function(w,i){x+='<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>';});
   x+='</cols><sheetData>';
@@ -444,41 +465,274 @@ function sheetXml(rows,widths){
       else if(c.t==='s')x+='<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xesc(c.v)+'</t></is></c>';
       else if(c.t==='d')x+='<c r="'+ref+'" s="1"><v>'+serial(c.v)+'</v></c>';
       else if(c.t==='m')x+='<c r="'+ref+'" s="2"><v>'+c.v+'</v></c>';
+      else if(c.t==='f')x+='<c r="'+ref+'" s="'+(c.s||2)+'"><f>'+xesc(c.f)+'</f><v>'+c.v+'</v></c>';
+      else if(c.t==='b')x+='<c r="'+ref+'" s="3" t="inlineStr"><is><t xml:space="preserve">'+xesc(c.v)+'</t></is></c>';
       else x+='<c r="'+ref+'"><v>'+c.v+'</v></c>';
     });
     x+='</row>';
   });
-  return x+'</sheetData></worksheet>';
+  x+='</sheetData>';
+  if(merges&&merges.length)x+='<mergeCells count="'+merges.length+'">'+merges.map(function(m){return '<mergeCell ref="'+m+'"/>';}).join('')+'</mergeCells>';
+  return x+'</worksheet>';
 }
 function buildXlsx(){
+  var v3=buildV3();
   var c=compute(),H=function(v){return {v:v,t:'h'};};
   var pr=[[H('Pay date'),H('Period start'),H('Period end'),H('Income'),H('Expenses'),H('Net'),H('Running savings'),H('Entries')]];
   c.periods.forEach(function(p){pr.push([{v:p.pay,t:'d'},{v:p.pay,t:'d'},{v:p.end,t:'d'},{v:p.income,t:'m'},{v:p.expense,t:'m'},{v:p.net,t:'m'},{v:p.running,t:'m'},{v:p.entries.length,t:'n'}]);});
   pr.push([]);pr.push([{v:'Starting balance',t:'s'},null,null,null,null,null,{v:state.settings.startingBalance,t:'m'}]);
   pr.push([{v:'Pay frequency',t:'s'},{v:FREQ_LABEL[state.settings.frequency],t:'s'}]);
-  var er=[[H('Date'),H('Pay date'),H('Type'),H('Category'),H('Description'),H('Amount'),H('Signed amount')]];
+  var er=[[H('Date'),H('Pay date'),H('Type'),H('Category'),H('Description'),H('Amount'),H('Signed amount'),H('Note')]];
   state.entries.slice().sort(function(a,b){return a.date.localeCompare(b.date)||a.createdAt-b.createdAt;}).forEach(function(e){
-    er.push([{v:parse(e.date),t:'d'},{v:payDate(periodIndexFor(e.date)),t:'d'},{v:e.type==='income'?'Income':'Expense',t:'s'},{v:e.category,t:'s'},{v:e.description,t:'s'},{v:e.amount,t:'m'},{v:e.type==='income'?e.amount:-e.amount,t:'m'}]);
+    er.push([{v:parse(e.date),t:'d'},{v:payDate(periodIndexFor(e.date)),t:'d'},{v:e.type==='income'?'Income':'Expense',t:'s'},{v:e.category,t:'s'},{v:e.description,t:'s'},{v:e.amount,t:'m'},{v:e.type==='income'?e.amount:-e.amount,t:'m'},{v:e.note||'',t:'s'}]);
   });
   var X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   return zip([
-    {name:'[Content_Types].xml',data:X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:'[Content_Types].xml',data:X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
     {name:'_rels/.rels',data:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
-    {name:'xl/workbook.xml',data:X+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Pay Periods" sheetId="1" r:id="rId1"/><sheet name="Entries" sheetId="2" r:id="rId2"/></sheets></workbook>'},
-    {name:'xl/_rels/workbook.xml.rels',data:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name:'xl/workbook.xml',data:X+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Cashflow V3" sheetId="3" r:id="rId4"/><sheet name="Pay Periods" sheetId="1" r:id="rId1"/><sheet name="Entries" sheetId="2" r:id="rId2"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels',data:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>'},
     {name:'xl/styles.xml',data:X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" formatCode="&quot;$&quot;#,##0.00;[Red]-&quot;$&quot;#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
     {name:'xl/worksheets/sheet1.xml',data:sheetXml(pr,[13,13,13,13,13,13,16,9])},
-    {name:'xl/worksheets/sheet2.xml',data:sheetXml(er,[12,12,10,16,30,13,14])}
+    {name:'xl/worksheets/sheet2.xml',data:sheetXml(er,[12,12,10,16,30,13,14,14])},
+    {name:'xl/worksheets/sheet3.xml',data:v3.xml}
   ]);
 }
 document.getElementById('btnXlsx').onclick=function(){
   var blob=buildXlsx(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cashflow-'+todayISO()+'.xlsx';
   document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},4000);toast('Excel file exported');
 };
+// ===================== Excel sync: import (unzip + XML parse) and Cashflow V3 export =====================
+var MON=['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.'];
+function sheetLabel(isoD){var d=new Date(parse(isoD));return MON[d.getUTCMonth()]+' '+d.getUTCDate()+', '+d.getUTCFullYear();}
+var MONIDX={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+function parseDateLabel(v){
+  if(typeof v!=='string')return null;var t=v.trim();
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(t);if(m)return t;
+  m=/^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(t);if(!m)return null;
+  var mi=MONIDX[m[1].toLowerCase().slice(0,3)];
+  if(mi===undefined)return null;var d=+m[2],y=+m[3];if(d<1||d>lastDay(y,mi))return null;
+  return iso(Date.UTC(y,mi,d));
+}
+function colIdx(letters){var n=0;for(var i=0;i<letters.length;i++)n=n*26+(letters.charCodeAt(i)-64);return n-1;}
+// --- minimal unzip (stored + deflate via DecompressionStream) ---
+function unzip(buf){
+  var u8=new Uint8Array(buf),dv=new DataView(buf),eocd=-1;
+  for(var i=u8.length-22;i>=Math.max(0,u8.length-65558);i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}}
+  if(eocd<0)throw new Error('Not a valid .xlsx (zip) file');
+  var count=dv.getUint16(eocd+10,true),p=dv.getUint32(eocd+16,true),files={},dec=new TextDecoder();
+  for(var k=0;k<count;k++){
+    if(dv.getUint32(p,true)!==0x02014b50)throw new Error('Corrupt zip directory');
+    var method=dv.getUint16(p+10,true),csize=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    var name=dec.decode(u8.subarray(p+46,p+46+nl));
+    var ds=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);
+    files[name]={method:method,data:u8.subarray(ds,ds+csize)};
+    p+=46+nl+xl+cl;
+  }
+  return files;
+}
+function inflateText(f){
+  if(!f)return Promise.resolve(null);
+  if(f.method===0)return Promise.resolve(new TextDecoder().decode(f.data));
+  if(f.method!==8)return Promise.reject(new Error('Unsupported zip compression'));
+  if(typeof DecompressionStream==='undefined')return Promise.reject(new Error('This browser cannot unzip files (needs iOS 16.4 or newer)'));
+  var stream=new Blob([f.data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(stream).text();
+}
+function xmlDoc(t){var d=new DOMParser().parseFromString(t,'application/xml');if(d.getElementsByTagName('parsererror').length)throw new Error('Could not read the spreadsheet XML');return d;}
+function tags(el,name){return Array.prototype.slice.call(el.getElementsByTagNameNS('*',name));}
+function textOf(el){return tags(el,'t').map(function(t){return t.textContent;}).join('');}
+function readGrid(xml,shared){
+  var doc=xmlDoc(xml),grid={};
+  tags(doc,'c').forEach(function(c){
+    var ref=c.getAttribute('r'),m=/^([A-Z]+)(\d+)$/.exec(ref||'');if(!m)return;
+    var t=c.getAttribute('t')||'n',vEl=tags(c,'v')[0],fEl=tags(c,'f')[0],cell={};
+    if(fEl)cell.f=fEl.textContent;
+    if(t==='s'&&vEl)cell.v=shared[+vEl.textContent];
+    else if(t==='inlineStr'){var is=tags(c,'is')[0];if(is)cell.v=textOf(is);}
+    else if(t==='str'&&vEl)cell.v=vEl.textContent;
+    else if(t==='b'&&vEl)cell.v=vEl.textContent==='1';
+    else if(t==='e'){cell.err=vEl?vEl.textContent:'#ERR';}
+    else if(vEl&&vEl.textContent!==''){cell.v=Number(vEl.textContent);}
+    var r=+m[2];(grid[r]=grid[r]||{})[colIdx(m[1])]=cell;
+  });
+  return grid;
+}
+function A1(col,row){return colName(col)+row;}
+function guessFrequency(dates){
+  if(dates.length<2)return null;
+  var ts=dates.map(parse),diffs=[];for(var i=1;i<ts.length;i++)diffs.push((ts[i]-ts[i-1])/86400000);
+  var semi=dates.every(function(d){var x=new Date(parse(d));return x.getUTCDate()===15||x.getUTCDate()===lastDay(x.getUTCFullYear(),x.getUTCMonth());});
+  if(semi&&diffs.every(function(d){return d>=13&&d<=16;}))return 'semimonthly';
+  if(diffs.every(function(d){return d===14;}))return 'biweekly';
+  if(diffs.every(function(d){return d===7;}))return 'weekly';
+  var d0=new Date(ts[0]).getUTCDate();if(dates.every(function(d){return new Date(parse(d)).getUTCDate()===d0;}))return 'monthly';
+  return null;
+}
+function parseBlock(grid,sheetName){
+  var rows=Object.keys(grid).map(Number).sort(function(a,b){return a-b;});
+  function headerDates(r){var out=[];Object.keys(grid[r]).map(Number).sort(function(a,b){return a-b;}).forEach(function(c){var cell=grid[r][c];var d=c>=1?parseDateLabel(cell.v):null;if(d)out.push({col:c,iso:d,label:String(cell.v).trim()});});return out;}
+  var headers=rows.map(function(r){return {row:r,dates:headerDates(r)};}).filter(function(h){return h.dates.length>0;});
+  if(!headers.length)return null;
+  var h=headers[0],endRow=headers[1]?headers[1].row-1:rows[rows.length-1],firstCol=h.dates[0].col;
+  var res={sheet:sheetName,headerRow:h.row,payDates:h.dates.map(function(d){return d.iso;}),labels:h.dates.map(function(d){return d.label;}),
+    startingBalance:0,entries:[],unmapped:[],netRow:null,owner:'',otherBlocks:[]};
+  Object.keys(grid[h.row]).forEach(function(c){c=+c;if(c<firstCol&&typeof grid[h.row][c].v==='string')res.owner=grid[h.row][c].v.trim();});
+  headers.slice(1).forEach(function(o,i){var lbl='';Object.keys(grid[o.row]).forEach(function(c){if(+c<o.dates[0].col&&typeof grid[o.row][c].v==='string')lbl=grid[o.row][c].v;});
+    var nextRow=headers[i+2]?headers[i+2].row-1:rows[rows.length-1];
+    res.otherBlocks.push({label:lbl,rows:o.row+'–'+nextRow,payDates:o.dates.map(function(d){return d.label;})});});
+  var mode='income',sub='fixed',stopped=false,sawStart=false;
+  rows.forEach(function(r){
+    if(r<=h.row||r>endRow||stopped)return;
+    var row=grid[r],label='',labelCol=-1;
+    Object.keys(row).map(Number).forEach(function(c){if(c<firstCol&&typeof row[c].v==='string'&&row[c].v.trim()&&c>labelCol){label=row[c].v.trim();labelCol=c;}});
+    var key=label.toLowerCase().replace(/[:\s]+$/,'');
+    var amounts=h.dates.map(function(d){return {d:d,cell:row[d.col],noteCell:row[d.col+1]};});
+    var hasNum=amounts.some(function(a){return a.cell&&typeof a.cell.v==='number'&&a.cell.v!==0;});
+    if(key==='net'){res.netRow=r;stopped=true;return;}
+    if(key==='total balance'||key==='running savings'||key==='total')return;
+    if(key==='expenses'||key==='expense'){mode='expense';sub='fixed';if(!hasNum)return;}
+    if(mode==='expense'&&(key==='fixed'||key==='variable')&&!hasNum){sub=key;return;}
+    var section=key==='starting balance'?'start':mode==='income'?'income':sub;
+    if(section==='start')sawStart=true;
+    amounts.forEach(function(a,i){
+      var cell=a.cell,note=a.noteCell&&a.noteCell.v!=null&&a.noteCell.v!==''?String(a.noteCell.v).trim():'';
+      var where=A1(a.d.col,r);
+      if(!cell||(cell.v==null&&!cell.f&&!cell.err)){if(note)res.unmapped.push(A1(a.d.col+1,r)+': note "'+note+'" on "'+(label||'(no name)')+'" has no amount for '+a.d.label);return;}
+      if(cell.err){res.unmapped.push(where+': error value '+cell.err);return;}
+      if(cell.v==null){res.unmapped.push(where+': formula ='+cell.f+' has no saved value (open & save the file in Excel/Numbers first)');return;}
+      if(typeof cell.v!=='number'){res.unmapped.push(where+': text "'+cell.v+'" is not an amount');return;}
+      var v=cell.v;if(v===0){if(note)res.unmapped.push(A1(a.d.col+1,r)+': note "'+note+'" on "'+label+'" has a $0 amount for '+a.d.label);return;}
+      if(section==='start'&&i===0){res.startingBalance=r6(v);if(note)res.unmapped.push(A1(a.d.col+1,r)+': note on starting balance "'+note+'"');return;}
+      if(!label){res.unmapped.push(where+': amount '+v+' has no item name');return;}
+      var isIncomeSec=section==='start'||section==='income';
+      var e={type:(isIncomeSec?v>0:v<0)?'income':'expense',amount:r6(Math.abs(v)),description:label,
+        category:isIncomeSec?'Income':section==='fixed'?'Fixed':'Variable',date:a.d.iso,section:section,order:r,source:'xlsx'};
+      if(note)e.note=note;
+      var f=cell.f&&cell.f.replace(/^=/,'').trim();if(f&&/^[\d.+\-*\/() ]+$/.test(f)&&/[+\-*\/]/.test(f))e.formula=f;
+      res.entries.push(e);
+    });
+  });
+  if(!sawStart&&!res.entries.length)return null;
+  res.frequency=guessFrequency(res.payDates);
+  return res;
+}
+function parseXlsx(buf){
+  var files;try{files=unzip(buf);}catch(e){return Promise.reject(e);}
+  var wb,rels,shared=[];
+  return Promise.all([inflateText(files['xl/workbook.xml']),inflateText(files['xl/_rels/workbook.xml.rels']),inflateText(files['xl/sharedStrings.xml'])]).then(function(t){
+    if(!t[0])throw new Error('No workbook found in this file');
+    wb=xmlDoc(t[0]);rels={};
+    if(t[1])tags(xmlDoc(t[1]),'Relationship').forEach(function(r){var tg=r.getAttribute('Target');tg=tg.charAt(0)==='/'?tg.slice(1):'xl/'+tg.replace(/^\.\//,'');rels[r.getAttribute('Id')]=tg;});
+    if(t[2])shared=tags(xmlDoc(t[2]),'si').map(textOf);
+    var sheets=tags(wb,'sheet').map(function(s){return {name:s.getAttribute('name'),path:rels[s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||s.getAttribute('r:id')]};});
+    var pref=sheets.filter(function(s){return s.name.trim().toLowerCase()==='cashflow v3';}).concat(sheets.filter(function(s){return s.name.trim().toLowerCase()!=='cashflow v3';}));
+    // try 'Cashflow V3' first, then any other sheet with the same layout
+    var i=0;
+    function next(){
+      if(i>=pref.length)throw new Error('No sheet with the Cashflow V3 layout (pay-date labels like "Oct. 15, 2026" across a row) was found');
+      var s=pref[i++];
+      return inflateText(files[s.path]).then(function(x){if(!x)return next();var r=parseBlock(readGrid(x,shared),s.name);if(r&&r.payDates.length&&(r.entries.length||r.startingBalance))return r;return next();});
+    }
+    return next();
+  });
+}
+function entryKeyMerge(e){return e.date+'\u0000'+e.description.trim().toLowerCase()+'\u0000'+(e.section||e.type);}
+function applyImport(res,mode){
+  var now=Date.now();
+  var incoming=res.entries.map(function(e,i){return Object.assign({id:uid(),createdAt:now+i},e);});
+  if(mode==='replace')state.entries=incoming;
+  else{
+    var idx={};state.entries.forEach(function(e,i){idx[entryKeyMerge(e)]=i;});
+    incoming.forEach(function(e){var k=entryKeyMerge(e);
+      if(idx[k]!==undefined){var old=state.entries[idx[k]];state.entries[idx[k]]=Object.assign({},old,e,{id:old.id,createdAt:old.createdAt});if(!e.formula)delete state.entries[idx[k]].formula;if(!e.note)delete state.entries[idx[k]].note;}
+      else{idx[k]=state.entries.length;state.entries.push(e);}});
+  }
+  state.settings.startingBalance=res.startingBalance||0;
+  if(res.payDates.length)state.settings.firstPayDate=res.payDates[0];
+  if(res.frequency)state.settings.frequency=res.frequency;
+  state=normalize(state);save();openSet={};render();
+}
+var pendingImport=null;
+document.getElementById('btnXlsxIn').onclick=function(){document.getElementById('xlsxFile').click();};
+document.getElementById('xlsxFile').onchange=function(ev){
+  var f=ev.target.files[0];ev.target.value='';if(!f)return;
+  f.arrayBuffer().then(parseXlsx).then(function(res){
+    pendingImport=res;
+    var inc=0,exp=0;res.entries.forEach(function(e){if(e.type==='income')inc+=e.amount;else exp+=e.amount;});
+    var h='<b>Sheet “'+esc(res.sheet)+'”</b>'+(res.owner?' ('+esc(res.owner)+')':'')+'<br>'+res.payDates.length+' pay dates: '+esc(res.labels[0])+' – '+esc(res.labels[res.labels.length-1])+
+      '<br>'+res.entries.length+' items · starting balance '+money.format(res.startingBalance)+
+      '<br>Pay schedule: '+(res.frequency?FREQ_LABEL[res.frequency]:'not detected (kept current)');
+    if(res.otherBlocks.length)h+='<br><span class="sub">Not imported: '+res.otherBlocks.map(function(b){return esc(b.label||'another section')+' (rows '+b.rows+')';}).join(', ')+'</span>';
+    if(res.unmapped.length)h+='<details style="margin-top:6px"><summary>'+res.unmapped.length+' cell(s) skipped</summary><div class="sub">'+res.unmapped.map(esc).join('<br>')+'</div></details>';
+    document.getElementById('xlSummary').innerHTML=h;
+    hide(setOv);show(xlOv);
+  }).catch(function(err){toast(err&&err.message?err.message:'Could not read that Excel file');});
+};
+document.getElementById('xlReplace').onclick=function(){if(!pendingImport)return;var n=pendingImport.entries.length;applyImport(pendingImport,'replace');pendingImport=null;hide(xlOv);toast('Imported '+n+' items');};
+document.getElementById('xlMerge').onclick=function(){if(!pendingImport)return;var n=pendingImport.entries.length;applyImport(pendingImport,'merge');pendingImport=null;hide(xlOv);toast('Merged '+n+' items');};
+
+function entrySection(e){return e.section||(e.type==='income'?'income':(e.category||'').toLowerCase()==='fixed'?'fixed':'variable');}
+function buildV3(){
+  var c=compute(),np=c.maxIdx+1,periods=c.periods.slice(0,np);
+  var groups={start:[],income:[],fixed:[],variable:[]},byKey={};
+  state.entries.forEach(function(e){
+    var sec=entrySection(e),k=sec+'\u0000'+e.description;
+    if(!byKey[k]){byKey[k]={sec:sec,name:e.description,order:isFinite(e.order)?e.order:Infinity,created:e.createdAt,cells:{}};if(sec!=='start')groups[sec].push(byKey[k]);}
+    var g=byKey[k];if(isFinite(e.order)&&e.order<g.order)g.order=e.order;if(e.createdAt<g.created)g.created=e.createdAt;
+    var pi=periodIndexFor(e.date);(g.cells[pi]=g.cells[pi]||[]).push(e);
+  });
+  ['income','fixed','variable'].forEach(function(s){groups[s].sort(function(a,b){return a.order-b.order||a.created-b.created;});});
+  var grid={},merges=[];function put(r,col,cell){(grid[r]=grid[r]||{})[col]=cell;}
+  var AC=function(i){return 5+2*i;};
+  put(1,0,{v:'Mark',t:'b'});merges.push('A1:E1');
+  periods.forEach(function(p,i){put(1,AC(i),{v:sheetLabel(iso(p.pay)),t:'b'});merges.push(A1(AC(i),1)+':'+A1(AC(i)+1,1));});
+  function signed(e,sec){var inc=sec==='start'||sec==='income';return (e.type==='income')===inc?e.amount:-e.amount;}
+  function writeCells(r,list,sec,extra){
+    periods.forEach(function(p,i){
+      var es=list[i]||[],vals=es.map(function(e){return signed(e,sec);});
+      if(extra&&i===0&&extra.v!==0){vals.unshift(extra.v);es=[{formula:null,amount:extra.v,type:'income'}].concat(es);}
+      if(!vals.length)return;
+      var sum=r6(vals.reduce(function(a,b){return a+b;},0));
+      var parts=es.map(function(e,j){var v=vals[j];return e.formula?(v<0?'-('+e.formula+')':(es.length>1?'('+e.formula+')':e.formula)):String(v);});
+      if(es.length===1&&!es[0].formula)put(r,AC(i),{v:sum,t:'m'});
+      else put(r,AC(i),{f:parts.join('+').replace(/\+-/g,'-'),v:sum,t:'f'});
+      var notes=es.map(function(e){return e.note;}).filter(Boolean);if(notes.length)put(r,AC(i)+1,{v:notes.join('; '),t:'s'});
+    });
+  }
+  var r=2,cached={};
+  put(r,2,{v:'Starting balance',t:'s'});
+  var startG=byKey['start\u0000Starting balance']||{cells:{}};
+  // any other start-section rows (different name) are merged into the starting balance row
+  Object.keys(byKey).forEach(function(k){var g=byKey[k];if(g.sec==='start'&&g!==startG)Object.keys(g.cells).forEach(function(pi){startG.cells[pi]=(startG.cells[pi]||[]).concat(g.cells[pi]);});});
+  writeCells(r,startG.cells,'start',{v:state.settings.startingBalance});
+  groups.income.forEach(function(g){r++;put(r,2,{v:g.name,t:'s'});writeCells(r,g.cells,'income');});
+  var incEnd=r;
+  r+=2;put(r,2,{v:'Expenses',t:'s'});
+  r++;put(r,3,{v:'Fixed',t:'s'});var expStart=r;
+  groups.fixed.forEach(function(g){r++;put(r,4,{v:g.name,t:'s'});writeCells(r,g.cells,'fixed');});
+  r+=2;put(r,3,{v:'Variable',t:'s'});
+  groups.variable.forEach(function(g){r++;put(r,4,{v:g.name,t:'s'});writeCells(r,g.cells,'variable');});
+  var expEnd=r;r+=2;var netR=r,runR=r+2;
+  put(netR,4,{v:'Net',t:'b'});put(runR,4,{v:'Running savings',t:'b'});
+  var run=0;
+  periods.forEach(function(p,i){
+    var L=colName(AC(i)),inc=0,exp=0;
+    for(var rr=2;rr<=expEnd;rr++){var cell=grid[rr]&&grid[rr][AC(i)];if(cell&&typeof cell.v==='number'){if(rr<=incEnd)inc+=cell.v;else exp+=cell.v;}}
+    var net=r6(inc-exp);run=r6(run+net);
+    put(netR,AC(i),{f:'SUM('+L+'2:'+L+incEnd+')-SUM('+L+expStart+':'+L+expEnd+')',v:net,t:'f'});
+    put(runR,AC(i),{f:i===0?L+netR:colName(AC(i-1))+runR+'+'+L+netR,v:run,t:'f'});
+  });
+  var maxR=runR,rowsArr=[];
+  for(var y=1;y<=maxR;y++){var row=[];var g=grid[y]||{};var mc=Math.max.apply(null,[-1].concat(Object.keys(g).map(Number)));for(var x=0;x<=mc;x++)row.push(g[x]||null);rowsArr.push(row);}
+  var widths=[8,4,18,4,22];periods.forEach(function(){widths.push(13,10);});
+  return {xml:sheetXml(rowsArr,widths,merges),netRow:netR,runRow:runR};
+}
+
 var tt;function toast(m){var t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(function(){t.style.display='none';},1800);}
 window.addEventListener('storage',function(e){if(e.key===KEY){state=load();render();}});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)render();});
-window.__cashflow={compute:compute,payDate:function(n){return iso(payDate(n));},periodIndexFor:periodIndexFor,state:function(){return state;}};
+window.__cashflow={parseXlsx:parseXlsx,applyImport:applyImport,buildXlsx:buildXlsx,compute:compute,payDate:function(n){return iso(payDate(n));},periodIndexFor:periodIndexFor,state:function(){return state;}};
 render();
 })();
 </script>
