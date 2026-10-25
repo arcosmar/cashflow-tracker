@@ -100,6 +100,19 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
 .secondary{width:100%;min-height:48px;border:0;border-radius:14px;background:var(--card);color:var(--accent);font-size:16px;font-weight:600;cursor:pointer;margin-top:8px}
 .note{font-size:13px;color:var(--muted);margin:8px 4px}
 .toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(40,40,40,.92);color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;z-index:20;display:none}
+.pfilter{position:sticky;top:0;z-index:4;background:var(--bg);padding:4px 16px 8px;max-width:640px;margin:0 auto}
+.seg3{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--chip);border-radius:12px;padding:3px}
+.seg3 button{min-height:44px;border:0;border-radius:10px;background:transparent;color:var(--text);font-size:16px;font-weight:600;cursor:pointer}
+.seg3 button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15);color:var(--accent)}
+.who{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:2px}
+.who.mark{background:rgba(10,132,255,.15);color:var(--accent)}.who.hannah{background:rgba(175,82,222,.16);color:#af52de}
+.tag.rec{background:var(--chip);color:var(--muted)}
+.entry .dot{font-size:11px;letter-spacing:.02em}
+.psec{background:var(--card);border-radius:14px;padding:10px 12px 4px;margin-bottom:12px}
+.psec h4{margin:2px 2px 8px;font-size:17px}
+.psec .field{background:var(--chip)}
+.chk{display:flex;gap:10px;align-items:center;font-size:15px;padding:6px 2px 10px}
+.chk input{width:22px;height:22px}
 </style>
 </head>
 <body>
@@ -107,10 +120,13 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
   <h1>Cashflow</h1>
   <button class="iconbtn" id="btnSettings" aria-label="Settings">Settings</button>
 </header>
+<div class="pfilter"><div class="seg3" id="personFilter" role="tablist" aria-label="Show cashflow for">
+  <button type="button" data-f="mark" role="tab">Mark</button><button type="button" data-f="hannah" role="tab">Hannah</button><button type="button" data-f="both" role="tab">Both</button>
+</div></div>
 <main>
   <div class="card summary" id="summary"></div>
   <div class="section-h"><h2>Pay periods</h2><span class="range" id="freqLabel"></span></div>
-  <p class="note" style="margin-top:-4px">Tap any amount to change it — totals update instantly. ✎ edits or deletes an item.</p>
+  <p class="note" style="margin-top:-4px">Tap any amount to change it — totals update instantly. Expenses are shown as positive amounts and subtracted from net. ✎ edits or deletes an item.</p>
   <div id="periods"></div>
   <button class="toggle" id="btnUpcoming"></button>
   <p class="note">Data is saved on this device only. Use Settings → Export to back it up.</p>
@@ -118,15 +134,16 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
 
 <div class="fab">
   <button class="inc" id="addInc">+ Income</button>
-  <button class="exp" id="addExp">− Expense</button>
+  <button class="exp" id="addExp">+ Expense</button>
 </div>
 
 <!-- Entry sheet -->
 <div class="overlay" id="entryOv">
   <form class="sheet" id="entryForm" autocomplete="off">
     <div class="sheet-h"><button type="button" class="iconbtn" data-close>Cancel</button><h3 id="entryTitle">New entry</h3><button type="submit" class="iconbtn">Save</button></div>
+    <div class="seg" id="personSeg"><button type="button" data-p="mark">Mark</button><button type="button" data-p="hannah">Hannah</button></div>
     <div class="seg" id="typeSeg"><button type="button" data-t="income" class="inc">Income</button><button type="button" data-t="expense" class="exp">Expense</button></div>
-    <div class="field"><label for="fAmount">Amount (CAD)</label><input id="fAmount" type="text" inputmode="decimal" placeholder="0.00" required></div>
+    <div class="field"><label for="fAmount" id="fAmountLbl">Amount (CAD)</label><input id="fAmount" type="text" inputmode="decimal" placeholder="0.00" required></div>
     <div class="field"><label for="fDesc">Description</label><input id="fDesc" type="text" placeholder="e.g. Paycheque, Rent" maxlength="80"></div>
     <div class="field"><label for="fCat">Category (optional)</label><input id="fCat" type="text" placeholder="Choose or type" maxlength="40"></div>
     <div class="chips" id="catChips"></div>
@@ -140,15 +157,7 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
 <div class="overlay" id="setOv">
   <form class="sheet" id="setForm">
     <div class="sheet-h"><button type="button" class="iconbtn" data-close>Cancel</button><h3>Settings</h3><button type="submit" class="iconbtn">Save</button></div>
-    <div class="field"><label for="sFreq">Pay frequency</label>
-      <select id="sFreq">
-        <option value="weekly">Weekly</option>
-        <option value="biweekly">Biweekly (every 14 days)</option>
-        <option value="semimonthly">Semi-monthly (15th &amp; last day)</option>
-        <option value="monthly">Monthly</option>
-      </select></div>
-    <div class="field"><label for="sFirst">First pay date</label><input id="sFirst" type="date" required></div>
-    <div class="field"><label for="sStart">Starting savings balance (CAD)</label><input id="sStart" type="text" inputmode="decimal" placeholder="0.00"></div>
+    <div id="peopleSettings"></div>
     <button type="submit" class="primary">Save settings</button>
     <button type="button" class="secondary" id="btnXlsxIn">Import from Excel (.xlsx)</button>
     <input type="file" id="xlsxFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
@@ -165,7 +174,7 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
     <div class="field" id="xlSummary" style="padding:12px 14px;font-size:15px"></div>
     <button type="button" class="primary" id="xlReplace">Replace all entries</button>
     <button type="button" class="secondary" id="xlMerge">Merge with current entries</button>
-    <p class="note">Merge updates items with the same pay date and name, and keeps everything else. Both options also apply the starting balance and pay schedule from the file.</p>
+    <p class="note">Each person block in the sheet (Mark, Hannah) is imported for that person. Sheet columns are placed on that person's own pay dates from Settings. Replace swaps that person's items; Merge updates items with the same person, pay date and name and keeps everything else. Both options also apply the opening balance and recurring pay amount from the file.</p>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -173,40 +182,25 @@ main{padding:8px 16px;max-width:640px;margin:0 auto}
 <script>
 (function(){
 'use strict';
-var KEY='cashflow.v1';
-var DEFAULT_SETTINGS={frequency:'biweekly',firstPayDate:'2026-10-15',startingBalance:0};
+var KEY='cashflow.v2',OLDKEY='cashflow.v1',BACKUPKEY='cashflow.v1.premigration',FKEY='cashflow.filter';
+var PEOPLE=['mark','hannah'],PNAME={mark:'Mark',hannah:'Hannah'};
+var FREQS=['weekly','biweekly','semimonthly','monthly'];
+var DEFAULT_PEOPLE={
+  mark:{frequency:'biweekly',firstPayDate:'2026-10-15',startingBalance:0,payLabel:'Pay',payAmount:2300,firstPayInOpening:false,payOverrides:{},horizon:''},
+  hannah:{frequency:'monthly',firstPayDate:'2026-10-20',startingBalance:0,payLabel:'Income (net off mandatory taxes)',payAmount:3955,firstPayInOpening:false,payOverrides:{},horizon:''}
+};
 var CATS={income:['Salary','Bonus','Side income','Refund','Gift','Other'],
           expense:['Fixed','Variable','Rent/Mortgage','Groceries','Utilities','Transport','Dining','Shopping','Bills','Health','Entertainment','Debt','Other']};
 var money=new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'});
 var dfLong=new Intl.DateTimeFormat('en-CA',{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 var dfShort=new Intl.DateTimeFormat('en-CA',{month:'short',day:'numeric',timeZone:'UTC'});
-
-function load(){
-  try{var d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.entries))return normalize(d);}catch(e){}
-  return {settings:Object.assign({},DEFAULT_SETTINGS),entries:[]};
-}
-function normalize(d){
-  var s=Object.assign({},DEFAULT_SETTINGS,d.settings||{});
-  s.startingBalance=Number(s.startingBalance)||0;
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(s.firstPayDate))s.firstPayDate=DEFAULT_SETTINGS.firstPayDate;
-  if(['weekly','biweekly','semimonthly','monthly'].indexOf(s.frequency)<0)s.frequency='biweekly';
-  var entries=(d.entries||[]).filter(function(e){return e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&isFinite(Number(e.amount));})
-    .map(function(e){var o={id:String(e.id||uid()),type:e.type==='income'?'income':'expense',amount:r6(Math.abs(Number(e.amount))),
-      description:String(e.description||''),category:String(e.category||''),date:e.date,createdAt:e.createdAt||Date.now()};
-      // optional fields added for Excel sync (older data simply lacks them)
-      if(e.note)o.note=String(e.note);
-      if(['start','income','fixed','variable'].indexOf(e.section)>=0)o.section=e.section;
-      if(isFinite(Number(e.order))&&e.order!==null&&e.order!=='')o.order=Number(e.order);
-      if(e.formula&&/^[\d.+\-*\/() ]+$/.test(e.formula))o.formula=String(e.formula);
-      if(e.source)o.source=String(e.source);
-      return o;});
-  return {settings:s,entries:entries};
-}
-var state=load();
-function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+var ISO_RE=/^\d{4}-\d{2}-\d{2}$/;
+function clone(o){return JSON.parse(JSON.stringify(o));}
 function r6(n){return Math.round(n*1e6)/1e6;}
-function amtStr(a){return Math.abs(a*100-Math.round(a*100))>1e-6?String(r6(a)):a.toFixed(2);}
+function r2(n){return Math.round(n*100)/100;}
+function amtStr(a){a=Math.abs(a);return Math.abs(a*100-Math.round(a*100))>1e-6?String(r6(a)):a.toFixed(2);}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function isPerson(p){return PEOPLE.indexOf(p)>=0;}
 
 // ---- dates (all as UTC-midnight to avoid DST issues) ----
 function parse(s){var p=s.split('-');return Date.UTC(+p[0],+p[1]-1,+p[2]);}
@@ -214,21 +208,16 @@ function iso(t){return new Date(t).toISOString().slice(0,10);}
 function addDays(t,n){return t+n*86400000;}
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function lastDay(y,m){return new Date(Date.UTC(y,m+1,0)).getUTCDate();}
-// nth pay date (n>=0) for the frequency
-function payDate(n){
-  var s=state.settings,a=parse(s.firstPayDate),ad=new Date(a);
+function P(pid){return state.people[pid];}
+// nth pay date (n>=0) for a person's schedule
+function payDate(pid,n){
+  var s=P(pid),a=parse(s.firstPayDate),ad=new Date(a);
   if(s.frequency==='weekly')return addDays(a,7*n);
   if(s.frequency==='biweekly')return addDays(a,14*n);
   var y=ad.getUTCFullYear(),m=ad.getUTCMonth(),d=ad.getUTCDate();
-  if(s.frequency==='monthly'){
-    var mm=m+n,yy=y+Math.floor(mm/12);mm=((mm%12)+12)%12;
-    return Date.UTC(yy,mm,Math.min(d,lastDay(yy,mm)));
-  }
-  // semimonthly: 15th and last day of month; the first date is the anchor itself
-  if(n===0)return a;
-  var slots=[];var cy=y,cm=m;
-  // generate sequential 15th / last-day dates after anchor
-  var cur=a,count=0;
+  if(s.frequency==='monthly'){var mm=m+n,yy=y+Math.floor(mm/12);mm=((mm%12)+12)%12;return Date.UTC(yy,mm,Math.min(d,lastDay(yy,mm)));}
+  if(n===0)return a; // semimonthly: 15th and last day of month after the anchor
+  var cy=y,cm=m,cur=a,count=0;
   while(true){
     var c15=Date.UTC(cy,cm,15),cL=Date.UTC(cy,cm,lastDay(cy,cm));
     if(c15>cur){count++;if(count===n)return c15;}
@@ -237,72 +226,173 @@ function payDate(n){
     if(count>5000)return cur;
   }
 }
-// index of period an ISO date belongs to (latest pay date <= date; before first -> 0)
-function periodIndexFor(dateIso){
-  var t=parse(dateIso);if(t<payDate(0))return 0;
-  var s=state.settings.frequency;
-  if(s==='weekly'||s==='biweekly'){var step=s==='weekly'?7:14;return Math.floor((t-payDate(0))/(step*86400000));}
-  var i=0;while(payDate(i+1)<=t)i++;return i;
+// index of the person's period an ISO date belongs to (latest pay date <= date; before first -> 0)
+function periodIndexFor(pid,dateIso){
+  var t=parse(dateIso),t0=payDate(pid,0);if(t<t0)return 0;
+  var f=P(pid).frequency;
+  if(f==='weekly'||f==='biweekly'){var step=f==='weekly'?7:14;return Math.floor((t-t0)/(step*86400000));}
+  var i=0;while(payDate(pid,i+1)<=t&&i<5000)i++;return i;
 }
+function snapDate(pid,d){return iso(payDate(pid,periodIndexFor(pid,d)));}
+// recurring pay for a period
+function payFor(pid,idx){
+  var s=P(pid),pd=iso(payDate(pid,idx));
+  if(Object.prototype.hasOwnProperty.call(s.payOverrides,pd))return s.payOverrides[pd];
+  if(idx===0&&s.firstPayInOpening)return 0;
+  return s.payAmount;
+}
+function defaultPayFor(pid,idx){var s=P(pid);return idx===0&&s.firstPayInOpening?0:s.payAmount;}
 
+// ---- load / normalize / migrate ----
+function normPerson(pid,x){
+  var s=Object.assign(clone(DEFAULT_PEOPLE[pid]),x||{});
+  if(FREQS.indexOf(s.frequency)<0)s.frequency=DEFAULT_PEOPLE[pid].frequency;
+  if(!ISO_RE.test(s.firstPayDate))s.firstPayDate=DEFAULT_PEOPLE[pid].firstPayDate;
+  s.startingBalance=r6(Number(s.startingBalance)||0);
+  s.payAmount=r6(Math.abs(Number(s.payAmount)||0));
+  s.payLabel=String(s.payLabel||'Pay').trim()||'Pay';
+  s.firstPayInOpening=!!s.firstPayInOpening;
+  var o={};Object.keys(s.payOverrides||{}).forEach(function(k){var v=Number(s.payOverrides[k]);if(ISO_RE.test(k)&&isFinite(v))o[k]=r6(Math.abs(v));});
+  s.payOverrides=o;
+  s.horizon=ISO_RE.test(s.horizon)?s.horizon:'';
+  return s;
+}
+function normEntry(e,defPerson){
+  var o={id:String(e.id||uid()),person:isPerson(e.person)?e.person:defPerson,type:e.type==='income'?'income':'expense',amount:r6(Math.abs(Number(e.amount))),
+    description:String(e.description||''),category:String(e.category||''),date:e.date,createdAt:e.createdAt||Date.now()};
+  if(e.note)o.note=String(e.note);
+  if(['start','income','fixed','variable'].indexOf(e.section)>=0)o.section=e.section;
+  if(isFinite(Number(e.order))&&e.order!==null&&e.order!=='')o.order=Number(e.order);
+  if(e.formula&&/^[\d.+\-*\/() ]+$/.test(e.formula))o.formula=String(e.formula);
+  if(e.source)o.source=String(e.source);
+  return o;
+}
+function validEntry(e){return e&&ISO_RE.test(e.date)&&isFinite(Number(e.amount));}
+function normalize(d){
+  if(d&&d.settings&&!d.people)return migrateV1(d);
+  var people={};PEOPLE.forEach(function(pid){people[pid]=normPerson(pid,d&&d.people&&d.people[pid]);});
+  return {version:2,people:people,entries:((d&&d.entries)||[]).filter(validEntry).map(function(e){return normEntry(e,'mark');})};
+}
+function modeOf(vals){var c={},best=null,bc=0;vals.forEach(function(v){var k=String(v);c[k]=(c[k]||0)+1;if(c[k]>bc){bc=c[k];best=v;}});return best;}
+// v1 (single person, "Starting balance" 2300 rows per semi-monthly date) -> v2
+function migrateV1(d){
+  var old=Object.assign({frequency:'semimonthly',firstPayDate:'2026-10-15',startingBalance:0},d.settings||{});
+  var mk=normPerson('mark',{firstPayDate:ISO_RE.test(old.firstPayDate)?old.firstPayDate:'2026-10-15',startingBalance:old.startingBalance});
+  var all=(d.entries||[]).filter(validEntry).map(function(e){return normEntry(e,'mark');});
+  all.forEach(function(e){e.person='mark';});
+  var starts=all.filter(function(e){return e.section==='start'&&e.type==='income';}),rest=all.filter(function(e){return starts.indexOf(e)<0;});
+  var tmp={version:2,people:{mark:mk,hannah:normPerson('hannah',{})},entries:rest};
+  var saved=state;state=tmp;
+  try{
+    if(starts.length)mk.payAmount=r6(modeOf(starts.map(function(e){return e.amount;})));
+    var sums={};starts.forEach(function(e){var pd=snapDate('mark',e.date);sums[pd]=r6((sums[pd]||0)+e.amount);});
+    var p0=iso(payDate('mark',0));
+    mk.firstPayInOpening=mk.startingBalance!==0&&!sums[p0];
+    var maxD=all.reduce(function(m,e){return e.date>m?e.date:m;},'');
+    if(maxD){mk.horizon=snapDate('mark',maxD);
+      var hi=periodIndexFor('mark',maxD);
+      if(starts.length)for(var i=0;i<=hi;i++){var pd=iso(payDate('mark',i)),act=sums[pd]||0;if(Math.abs(act-defaultPayFor('mark',i))>1e-9)mk.payOverrides[pd]=act;}}
+    // items that came from the sheet sit on old semi-monthly column dates: snap them onto the biweekly pay date of their period
+    rest.forEach(function(e){if(e.source==='xlsx')e.date=snapDate('mark',e.date);});
+  }finally{state=saved;}
+  return tmp;
+}
+function load(){
+  try{var d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.entries))return normalize(d);}catch(e){}
+  try{var o=localStorage.getItem(OLDKEY);if(o){var od=JSON.parse(o);if(od&&Array.isArray(od.entries)){
+    if(!localStorage.getItem(BACKUPKEY))localStorage.setItem(BACKUPKEY,o);
+    var m=normalize(od);localStorage.setItem(KEY,JSON.stringify(m));return m;}}}catch(e){}
+  return normalize({people:{},entries:[]});
+}
+var state={people:{mark:clone(DEFAULT_PEOPLE.mark),hannah:clone(DEFAULT_PEOPLE.hannah)},entries:[]};
+state=load();
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+var filter=(function(){var f=localStorage.getItem(FKEY);return f==='mark'||f==='hannah'||f==='both'?f:'mark';})();
+function setFilter(f){filter=f;localStorage.setItem(FKEY,f);render();}
+
+// ---- compute ----
 var showUpcoming=false,openSet={};
-function compute(){
-  var curIdx=periodIndexFor(todayISO());
-  var maxIdx=curIdx;
-  state.entries.forEach(function(e){var i=periodIndexFor(e.date);if(i>maxIdx)maxIdx=i;});
-  var lastShown=maxIdx+(showUpcoming?1:0);
-  var periods=[];
+function computePerson(pid){
+  var s=P(pid),curIdx=periodIndexFor(pid,todayISO()),maxIdx=curIdx;
+  var mine=state.entries.filter(function(e){return e.person===pid;});
+  mine.forEach(function(e){var i=periodIndexFor(pid,e.date);if(i>maxIdx)maxIdx=i;});
+  if(s.horizon){var hi=periodIndexFor(pid,s.horizon);if(hi>maxIdx)maxIdx=hi;}
+  var lastShown=maxIdx+(showUpcoming?1:0),periods=[];
   for(var i=0;i<=lastShown;i++){
-    periods.push({idx:i,pay:payDate(i),end:addDays(payDate(i+1),-1),income:0,expense:0,entries:[]});
+    var pay=payDate(pid,i),pd=iso(pay),pa=payFor(pid,i),p={person:pid,idx:i,pay:pay,end:addDays(payDate(pid,i+1),-1),income:0,expense:0,entries:[],payAmount:pa};
+    var hasOv=Object.prototype.hasOwnProperty.call(s.payOverrides,pd);
+    if(pa>0||hasOv){p.entries.push({id:'pay:'+pid+':'+pd,virtual:true,person:pid,type:'income',amount:pa,description:s.payLabel,category:'Recurring',date:pd,order:-1,createdAt:0});p.income+=pa;}
+    periods.push(p);
   }
-  state.entries.forEach(function(e){var p=periods[periodIndexFor(e.date)];p.entries.push(e);
-    if(e.type==='income')p.income+=e.amount;else p.expense+=e.amount;});
-  var run=state.settings.startingBalance;
+  mine.forEach(function(e){var p=periods[periodIndexFor(pid,e.date)];p.entries.push(e);if(e.type==='income')p.income+=e.amount;else p.expense+=e.amount;});
+  var run=s.startingBalance;
   periods.forEach(function(p){
-    p.income=Math.round(p.income*100)/100;p.expense=Math.round(p.expense*100)/100;
-    p.net=Math.round((p.income-p.expense)*100)/100;run=Math.round((run+p.net)*100)/100;p.running=run;
+    p.income=r2(p.income);p.expense=r2(p.expense);p.net=r2(p.income-p.expense);run=r2(run+p.net);p.running=run;
     p.entries.sort(function(a,b){var oa=isFinite(a.order)?a.order:1e9,ob=isFinite(b.order)?b.order:1e9;return b.date.localeCompare(a.date)||oa-ob||b.createdAt-a.createdAt;});
   });
-  return {periods:periods,curIdx:curIdx,maxIdx:maxIdx};
+  return {person:pid,periods:periods,curIdx:curIdx,maxIdx:maxIdx};
+}
+function compute(f){
+  f=f||filter;
+  if(f!=='both')return computePerson(f);
+  var per={},all=[];
+  PEOPLE.forEach(function(pid){per[pid]=computePerson(pid);all=all.concat(per[pid].periods);});
+  all.sort(function(a,b){return a.pay-b.pay||PEOPLE.indexOf(a.person)-PEOPLE.indexOf(b.person);});
+  var last={};PEOPLE.forEach(function(pid){last[pid]=P(pid).startingBalance;});
+  all.forEach(function(p){last[p.person]=p.running;p.combined=r2(PEOPLE.reduce(function(a,pid){return a+last[pid];},0));});
+  return {person:'both',periods:all,per:per};
 }
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function cls(v){return v>0?'pos':v<0?'neg':'';}
 function signed(v){return (v>0?'+':'')+money.format(v);}
 var FREQ_LABEL={weekly:'Weekly',biweekly:'Biweekly',semimonthly:'Semi-monthly',monthly:'Monthly'};
+function who(pid){return '<span class="who '+pid+'">'+PNAME[pid]+'</span>';}
+function schedText(pid){var s=P(pid);return FREQ_LABEL[s.frequency]+' '+money.format(s.payAmount);}
 
 function render(){
-  var c=compute(),cur=c.periods[c.curIdx];
-  var savingsNow=cur.running;
-  document.getElementById('summary').innerHTML=
-    '<div><div class="label">This pay period</div><div class="big '+cls(cur.net)+'" data-testid="cur-net">'+signed(cur.net)+'</div>'+
-    '<div class="sub">'+dfShort.format(cur.pay)+' – '+dfShort.format(cur.end)+'</div></div>'+
-    '<div><div class="label">Total savings</div><div class="big '+cls(savingsNow)+'" data-testid="cur-savings">'+money.format(savingsNow)+'</div>'+
-    '<div class="sub">Start '+money.format(state.settings.startingBalance)+'</div></div>';
-  document.getElementById('freqLabel').textContent=FREQ_LABEL[state.settings.frequency]+' · newest first';
-  var html='';
-  for(var i=c.periods.length-1;i>=0;i--){
-    var p=c.periods[i],isOpen=openSet[p.idx]!==undefined?openSet[p.idx]:true;
-    var badge=p.idx===c.curIdx?'<span class="badge">Current</span>':(p.idx>c.curIdx?'<span class="badge up">Upcoming</span>':'');
-    html+='<div class="card'+(isOpen?' open':'')+'" data-period="'+p.idx+'">'+
-      '<button class="period" data-toggle="'+p.idx+'" aria-expanded="'+isOpen+'">'+
-      '<div class="prow"><div><span class="pdate">'+dfLong.format(p.pay)+'</span>'+badge+'</div><span class="chev">▶</span></div>'+
-      '<div class="prow"><span class="range">'+dfShort.format(p.pay)+' – '+dfLong.format(p.end)+' · '+p.entries.length+' entr'+(p.entries.length===1?'y':'ies')+'</span></div>'+
+  Array.prototype.forEach.call(document.querySelectorAll('#personFilter button'),function(b){var on=b.getAttribute('data-f')===filter;b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
+  var c=compute(),sum=document.getElementById('summary');
+  if(filter!=='both'){
+    var cur=c.periods[c.curIdx],s=P(filter);
+    sum.innerHTML='<div><div class="label">This pay period</div><div class="big '+cls(cur.net)+'" data-testid="cur-net">'+signed(cur.net)+'</div>'+
+      '<div class="sub">'+PNAME[filter]+' · '+dfShort.format(cur.pay)+' – '+dfShort.format(cur.end)+'</div></div>'+
+      '<div><div class="label">Total savings</div><div class="big '+cls(cur.running)+'" data-testid="cur-savings">'+money.format(cur.running)+'</div>'+
+      '<div class="sub">Start '+money.format(s.startingBalance)+' · '+schedText(filter)+'</div></div>';
+    document.getElementById('freqLabel').textContent=PNAME[filter]+' · '+FREQ_LABEL[s.frequency]+' · newest first';
+  }else{
+    var nets=0,runs=0,sn=[],sr=[];
+    PEOPLE.forEach(function(pid){var pc=c.per[pid],cp=pc.periods[pc.curIdx];nets+=cp.net;runs+=cp.running;sn.push(PNAME[pid]+' '+signed(cp.net));sr.push(PNAME[pid]+' '+money.format(cp.running));});
+    nets=r2(nets);runs=r2(runs);
+    sum.innerHTML='<div><div class="label">Current periods</div><div class="big '+cls(nets)+'" data-testid="cur-net">'+signed(nets)+'</div><div class="sub">'+esc(sn.join(' · '))+'</div></div>'+
+      '<div><div class="label">Combined savings</div><div class="big '+cls(runs)+'" data-testid="cur-savings">'+money.format(runs)+'</div><div class="sub">'+esc(sr.join(' · '))+'</div></div>';
+    document.getElementById('freqLabel').textContent='Mark + Hannah · newest first';
+  }
+  var html='',list=c.periods;
+  for(var i=list.length-1;i>=0;i--){
+    var p=list[i],k=p.person+':'+p.idx,isOpen=openSet[k]!==undefined?openSet[k]:true;
+    var curIdx=filter==='both'?c.per[p.person].curIdx:c.curIdx;
+    var badge=p.idx===curIdx?'<span class="badge">Current</span>':(p.idx>curIdx?'<span class="badge up">Upcoming</span>':'');
+    html+='<div class="card'+(isOpen?' open':'')+'" data-period="'+p.idx+'" data-person="'+p.person+'">'+
+      '<button class="period" data-toggle="'+k+'" aria-expanded="'+isOpen+'">'+
+      '<div class="prow"><div><span class="pdate">'+dfLong.format(p.pay)+'</span>'+(filter==='both'?who(p.person):'')+badge+'</div><span class="chev">▶</span></div>'+
+      '<div class="prow"><span class="range">'+dfShort.format(p.pay)+' – '+dfLong.format(p.end)+' · '+p.entries.length+' item'+(p.entries.length===1?'':'s')+'</span></div>'+
       '<div class="stats">'+
         '<div class="stat"><div class="label">Income</div><div class="v pos">'+money.format(p.income)+'</div></div>'+
         '<div class="stat"><div class="label">Expenses</div><div class="v neg">'+money.format(p.expense)+'</div></div>'+
-        '<div class="stat"><div class="label">Net</div><div class="v '+cls(p.net)+'" data-testid="net-'+p.idx+'">'+signed(p.net)+'</div></div>'+
+        '<div class="stat"><div class="label">Net</div><div class="v '+cls(p.net)+'" data-testid="net-'+p.person+'-'+p.idx+'">'+signed(p.net)+'</div></div>'+
       '</div>'+
-      '<div class="prow" style="margin-top:8px"><span class="range">Running savings</span><span class="net '+cls(p.running)+'" data-testid="run-'+p.idx+'">'+money.format(p.running)+'</span></div>'+
+      '<div class="prow" style="margin-top:8px"><span class="range">'+(filter==='both'?PNAME[p.person]+'’s running savings':'Running savings')+'</span><span class="net '+cls(p.running)+'" data-testid="run-'+p.person+'-'+p.idx+'">'+money.format(p.running)+'</span></div>'+
+      (filter==='both'?'<div class="prow" style="margin-top:2px"><span class="range">Combined savings</span><span class="net '+cls(p.combined)+'" data-testid="comb-'+p.person+'-'+p.idx+'">'+money.format(p.combined)+'</span></div>':'')+
       '</button><div class="entries">';
-    if(!p.entries.length)html+='<div class="empty">No entries yet</div>';
+    if(!p.entries.length)html+='<div class="empty">No items yet</div>';
     p.entries.forEach(function(e){
       var inc=e.type==='income';
-      html+='<div class="entry" data-id="'+esc(e.id)+'"><div class="dot '+(inc?'inc':'exp')+'">'+(inc?'+':'−')+'</div>'+
+      html+='<div class="entry" data-id="'+esc(e.id)+'"><div class="dot '+(inc?'inc':'exp')+'" aria-hidden="true">'+(inc?'IN':'OUT')+'</div>'+
         '<div class="meta"><div class="desc">'+esc(e.description||(inc?'Income':'Expense'))+'</div><div class="small">'+
-        '<span class="tag '+(inc?'inc':'exp')+'">'+(inc?'Income':'Expense')+'</span>'+dfShort.format(parse(e.date))+(e.category?' · '+esc(e.category):'')+(e.note?' · '+esc(e.note):'')+'</div></div>'+
-        '<label class="amtwrap"><span class="sign '+(inc?'pos':'neg')+'">'+(inc?'+$':'−$')+'</span>'+
-        '<input class="amt-in '+(inc?'pos':'neg')+'" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="Amount for '+esc(e.description||e.type)+'" data-amt="'+esc(e.id)+'" value="'+amtStr(e.amount)+'"></label>'+
-        '<button class="edit" type="button" data-edit="'+esc(e.id)+'" aria-label="Edit or delete entry">✎</button></div>';
+        '<span class="tag '+(inc?'inc':'exp')+'">'+(inc?'Income':'Expense')+'</span>'+(e.virtual?'<span class="tag rec">↻ '+FREQ_LABEL[P(e.person).frequency]+'</span>':'')+dfShort.format(parse(e.date))+(e.category&&!e.virtual?' · '+esc(e.category):'')+(e.note?' · '+esc(e.note):'')+'</div></div>'+
+        '<label class="amtwrap"><span class="sign '+(inc?'pos':'neg')+'">$</span>'+
+        '<input class="amt-in '+(inc?'pos':'neg')+'" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="'+(inc?'Income':'Expense')+' amount for '+esc(e.description||e.type)+'" data-amt="'+esc(e.id)+'" value="'+amtStr(e.amount)+'"></label>'+
+        '<button class="edit" type="button" data-edit="'+esc(e.id)+'" aria-label="'+(e.virtual?'Edit pay schedule':'Edit or delete entry')+'">✎</button></div>';
     });
     html+='</div></div>';
   }
@@ -311,35 +401,46 @@ function render(){
 }
 
 // ---- interactions ----
+document.getElementById('personFilter').addEventListener('click',function(ev){var b=ev.target.closest('button[data-f]');if(b){openSet={};setFilter(b.getAttribute('data-f'));window.scrollTo(0,0);}});
 document.getElementById('periods').addEventListener('click',function(ev){
   var t=ev.target.closest('[data-toggle]');
-  if(t){var i=+t.getAttribute('data-toggle');var card=t.parentNode;var now=!card.classList.contains('open');openSet[i]=now;card.classList.toggle('open',now);t.setAttribute('aria-expanded',now);return;}
-  var e=ev.target.closest('[data-edit]');if(e)openEntry(null,e.getAttribute('data-edit'));
+  if(t){var k=t.getAttribute('data-toggle');var card=t.parentNode;var now=!card.classList.contains('open');openSet[k]=now;card.classList.toggle('open',now);t.setAttribute('aria-expanded',now);return;}
+  var e=ev.target.closest('[data-edit]');if(!e)return;var id=e.getAttribute('data-edit');
+  if(id.indexOf('pay:')===0)openSettings(id.split(':')[1]);else openEntry(null,id);
 });
+function findEntry(id){return state.entries.filter(function(x){return x.id===id;})[0];}
+function amountOf(id){if(id.indexOf('pay:')===0){var a=id.split(':');return payFor(a[1],periodIndexFor(a[1],a[2]));}var e=findEntry(id);return e?e.amount:null;}
 var pList=document.getElementById('periods');
 pList.addEventListener('focusin',function(ev){var t=ev.target;if(t.matches&&t.matches('[data-amt]'))setTimeout(function(){try{t.select();}catch(e){}},0);});
 pList.addEventListener('keydown',function(ev){var t=ev.target;if(!t.matches('[data-amt]'))return;
   if(ev.key==='Enter'){ev.preventDefault();t.blur();}
-  else if(ev.key==='Escape'){var e0=state.entries.filter(function(x){return x.id===t.getAttribute('data-amt');})[0];if(e0)t.value=amtStr(e0.amount);t.blur();}});
+  else if(ev.key==='Escape'){var a=amountOf(t.getAttribute('data-amt'));if(a!=null)t.value=amtStr(a);t.blur();}});
 pList.addEventListener('change',function(ev){
   var t=ev.target;if(!t.matches('[data-amt]'))return;
-  var id=t.getAttribute('data-amt'),e=state.entries.filter(function(x){return x.id===id;})[0];if(!e)return;
+  var id=t.getAttribute('data-amt'),cur=amountOf(id);if(cur==null)return;
   var v=parseAmt(t.value);
-  if(!isFinite(v)||v<=0){t.value=amtStr(e.amount);toast('Amount must be greater than 0');return;}
-  v=Math.abs(v);if(Math.abs(v-e.amount)<1e-9){t.value=amtStr(e.amount);return;}
-  e.amount=v;delete e.formula;save();
-  // re-render after focus has moved, then restore focus/caret to whichever amount field the user tapped next
+  if(id.indexOf('pay:')===0){
+    if(!isFinite(v)){t.value=amtStr(cur);toast('Enter an amount');return;}
+    v=Math.abs(v);var a=id.split(':'),pid=a[1],pd=a[2],idx=periodIndexFor(pid,pd);
+    if(Math.abs(v-defaultPayFor(pid,idx))<1e-9)delete P(pid).payOverrides[pd];else P(pid).payOverrides[pd]=v;
+  }else{
+    // expenses (and incomes) are always stored as positive amounts; a typed minus sign is ignored
+    if(!isFinite(v)||v===0){t.value=amtStr(cur);toast('Amount must not be 0');return;}
+    v=Math.abs(v);var e=findEntry(id);if(Math.abs(v-e.amount)<1e-9){t.value=amtStr(e.amount);return;}
+    e.amount=v;delete e.formula;
+  }
+  save();
   setTimeout(function(){
     var a=document.activeElement,nextId=a&&a.matches&&a.matches('[data-amt]')?a.getAttribute('data-amt'):null,nextVal=nextId?a.value:null;
     var y=window.scrollY;render();window.scrollTo(0,y);
-    if(nextId){var n=pList.querySelector('[data-amt="'+(window.CSS&&CSS.escape?CSS.escape(nextId):nextId)+'"]');if(n){n.value=nextVal;n.focus();}}
+    if(nextId&&nextId!==id){var n=pList.querySelector('[data-amt="'+(window.CSS&&CSS.escape?CSS.escape(nextId):nextId)+'"]');if(n){n.value=nextVal;n.focus();}}
     toast('Saved');
   },0);
 });
 document.getElementById('btnUpcoming').onclick=function(){showUpcoming=!showUpcoming;render();};
 
 var entryOv=document.getElementById('entryOv'),setOv=document.getElementById('setOv');
-var curType='income',editingId=null;
+var curType='income',curPerson='mark',editingId=null;
 function show(ov){ov.classList.add('show');}
 function hide(ov){ov.classList.remove('show');if(document.activeElement)document.activeElement.blur();}
 var xlOv=document.getElementById('xlOv');
@@ -348,63 +449,85 @@ var xlOv=document.getElementById('xlOv');
 });
 function setType(t){curType=t;
   Array.prototype.forEach.call(document.querySelectorAll('#typeSeg button'),function(b){b.classList.toggle('on',b.getAttribute('data-t')===t);});
+  document.getElementById('fAmountLbl').textContent=t==='expense'?'Expense amount (CAD, positive)':'Income amount (CAD)';
   renderChips();}
+function setPerson(p){curPerson=p;Array.prototype.forEach.call(document.querySelectorAll('#personSeg button'),function(b){b.classList.toggle('on',b.getAttribute('data-p')===p);});}
 function renderChips(){
   var v=document.getElementById('fCat').value;
   document.getElementById('catChips').innerHTML=CATS[curType].map(function(c){return '<button type="button" class="'+(c===v?'on':'')+'" data-cat="'+esc(c)+'">'+esc(c)+'</button>';}).join('');
 }
 document.getElementById('typeSeg').onclick=function(e){var b=e.target.closest('button');if(b)setType(b.getAttribute('data-t'));};
+document.getElementById('personSeg').onclick=function(e){var b=e.target.closest('button');if(b)setPerson(b.getAttribute('data-p'));};
 document.getElementById('catChips').onclick=function(e){var b=e.target.closest('button');if(!b)return;var f=document.getElementById('fCat');var c=b.getAttribute('data-cat');f.value=f.value===c?'':c;renderChips();};
 document.getElementById('fCat').oninput=renderChips;
 
 function openEntry(type,id){
   editingId=id||null;
-  var e=id?state.entries.filter(function(x){return x.id===id;})[0]:null;
+  var e=id?findEntry(id):null;
   document.getElementById('entryTitle').textContent=e?'Edit entry':'New entry';
   document.getElementById('fAmount').value=e?amtStr(e.amount):'';
   document.getElementById('fDesc').value=e?e.description:'';
   document.getElementById('fCat').value=e?e.category:'';
   document.getElementById('fDate').value=e?e.date:todayISO();
   document.getElementById('btnDelete').hidden=!e;
+  setPerson(e?e.person:(filter==='both'?'mark':filter));
   setType(e?e.type:type);
   show(entryOv);
 }
 document.getElementById('addInc').onclick=function(){openEntry('income');};
 document.getElementById('addExp').onclick=function(){openEntry('expense');};
-function parseAmt(s){s=String(s).replace(/[$,\s]/g,'');if(s==='')return NaN;return r6(Number(s));}
+function parseAmt(s){s=String(s).replace(/[$,\s]/g,'').replace(/^\((.*)\)$/,'-$1').replace(/^[\u2212\u2013]/,'-');if(s==='')return NaN;return r6(Number(s));}
 document.getElementById('entryForm').addEventListener('submit',function(ev){
   ev.preventDefault();
   var amt=parseAmt(document.getElementById('fAmount').value),date=document.getElementById('fDate').value;
-  if(!isFinite(amt)||amt<=0){toast('Enter an amount greater than 0');return;}
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){toast('Pick a date');return;}
-  var data={type:curType,amount:Math.abs(amt),description:document.getElementById('fDesc').value.trim(),category:document.getElementById('fCat').value.trim(),date:date};
+  if(!isFinite(amt)||amt===0){toast('Enter an amount');return;}
+  if(!ISO_RE.test(date)){toast('Pick a date');return;}
+  var data={person:curPerson,type:curType,amount:Math.abs(amt),description:document.getElementById('fDesc').value.trim(),category:document.getElementById('fCat').value.trim(),date:date};
   if(editingId){state.entries=state.entries.map(function(x){if(x.id!==editingId)return x;var n=Object.assign({},x,data);if(Math.abs(n.amount-x.amount)>1e-9)delete n.formula;if(n.type!==x.type)delete n.section;return n;});}
   else{data.id=uid();data.createdAt=Date.now();state.entries.push(data);}
-  openSet[periodIndexFor(date)]=true;
-  save();hide(entryOv);render();toast(editingId?'Entry updated':'Entry added');
+  openSet[curPerson+':'+periodIndexFor(curPerson,date)]=true;
+  if(filter!=='both'&&filter!==curPerson)toast('Saved to '+PNAME[curPerson]+' — switch filter to see it');
+  save();hide(entryOv);render();if(filter==='both'||filter===curPerson)toast(editingId?'Entry updated':'Entry added');
 });
 document.getElementById('btnDelete').onclick=function(){
   if(!editingId||!confirm('Delete this entry?'))return;
   state.entries=state.entries.filter(function(x){return x.id!==editingId;});save();hide(entryOv);render();toast('Entry deleted');
 };
 
-// settings
-document.getElementById('btnSettings').onclick=function(){
-  document.getElementById('sFreq').value=state.settings.frequency;
-  document.getElementById('sFirst').value=state.settings.firstPayDate;
-  document.getElementById('sStart').value=state.settings.startingBalance?state.settings.startingBalance.toFixed(2):'';
+// settings: one section per person
+function personSettingsHtml(pid){
+  var s=P(pid),q=function(n){return 's-'+pid+'-'+n;};
+  return '<div class="psec" data-p="'+pid+'" id="psec-'+pid+'"><h4>'+PNAME[pid]+'’s pay schedule</h4>'+
+    '<div class="field"><label for="'+q('freq')+'">Pay frequency</label><select id="'+q('freq')+'">'+
+      FREQS.map(function(f){return '<option value="'+f+'"'+(s.frequency===f?' selected':'')+'>'+{weekly:'Weekly',biweekly:'Biweekly (every 14 days)',semimonthly:'Semi-monthly (15th &amp; last day)',monthly:'Monthly (same day each month)'}[f]+'</option>';}).join('')+'</select></div>'+
+    '<div class="field"><label for="'+q('first')+'">First pay date</label><input id="'+q('first')+'" type="date" required value="'+s.firstPayDate+'"></div>'+
+    '<div class="field"><label for="'+q('label')+'">Recurring income name</label><input id="'+q('label')+'" type="text" maxlength="60" value="'+esc(s.payLabel)+'"></div>'+
+    '<div class="field"><label for="'+q('pay')+'">Recurring income per pay date (CAD)</label><input id="'+q('pay')+'" type="text" inputmode="decimal" value="'+amtStr(s.payAmount)+'"></div>'+
+    '<div class="field"><label for="'+q('start')+'">Opening balance on first pay date (CAD)</label><input id="'+q('start')+'" type="text" inputmode="decimal" placeholder="0.00" value="'+(s.startingBalance?s.startingBalance.toFixed(2):'')+'"></div>'+
+    '<label class="chk"><input type="checkbox" id="'+q('incl')+'"'+(s.firstPayInOpening?' checked':'')+'> Opening balance already includes the first pay</label></div>';
+}
+function openSettings(focusPid){
+  document.getElementById('peopleSettings').innerHTML=PEOPLE.map(personSettingsHtml).join('');
   show(setOv);
-};
+  if(focusPid&&focusPid!==PEOPLE[0]){var el=document.getElementById('psec-'+focusPid);if(el)setTimeout(function(){el.scrollIntoView({block:'start'});},50);}
+}
+document.getElementById('btnSettings').onclick=function(){openSettings(filter==='both'?null:filter);};
 document.getElementById('setForm').addEventListener('submit',function(ev){
   ev.preventDefault();
-  var sb=document.getElementById('sStart').value.trim();var sbv=sb===''?0:parseAmt(sb);
-  if(!isFinite(sbv)){toast('Invalid starting balance');return;}
-  var fd=document.getElementById('sFirst').value;if(!/^\d{4}-\d{2}-\d{2}$/.test(fd)){toast('Pick a first pay date');return;}
-  state.settings={frequency:document.getElementById('sFreq').value,firstPayDate:fd,startingBalance:sbv};
+  var next={};
+  for(var i=0;i<PEOPLE.length;i++){var pid=PEOPLE[i],g=function(n){return document.getElementById('s-'+pid+'-'+n);};
+    var sb=g('start').value.trim(),sbv=sb===''?0:parseAmt(sb),pv=parseAmt(g('pay').value||'0'),fd=g('first').value;
+    if(!isFinite(sbv)){toast('Invalid opening balance for '+PNAME[pid]);return;}
+    if(!isFinite(pv)){toast('Invalid income amount for '+PNAME[pid]);return;}
+    if(!ISO_RE.test(fd)){toast('Pick a first pay date for '+PNAME[pid]);return;}
+    next[pid]=Object.assign({},P(pid),{frequency:g('freq').value,firstPayDate:fd,payLabel:g('label').value.trim()||'Pay',payAmount:Math.abs(pv),startingBalance:sbv,firstPayInOpening:g('incl').checked});
+  }
+  PEOPLE.forEach(function(pid){state.people[pid]=normPerson(pid,next[pid]);});
   openSet={};save();hide(setOv);render();toast('Settings saved');
 });
+function exportJson(){return {app:'cashflow',version:2,exportedAt:new Date().toISOString(),people:state.people,entries:state.entries};}
 document.getElementById('btnExport').onclick=function(){
-  var blob=new Blob([JSON.stringify({app:'cashflow',version:1,exportedAt:new Date().toISOString(),settings:state.settings,entries:state.entries},null,2)],{type:'application/json'});
+  var blob=new Blob([JSON.stringify(exportJson(),null,2)],{type:'application/json'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cashflow-backup-'+todayISO()+'.json';
   document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
 };
@@ -420,9 +543,8 @@ document.getElementById('importFile').onchange=function(e){
 };
 document.getElementById('btnClear').onclick=function(){
   if(!confirm('Erase ALL entries and settings on this device? Export first if you want a backup.'))return;
-  localStorage.removeItem(KEY);state=load();openSet={};hide(setOv);render();toast('All data erased');
+  [KEY,OLDKEY,BACKUPKEY].forEach(function(k){localStorage.removeItem(k);});state=load();openSet={};hide(setOv);render();toast('All data erased');
 };
-
 // ---- XLSX export (tiny inline zip writer + SpreadsheetML, no dependencies) ----
 var CRC=(function(){var t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
 function crc32(b){var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
@@ -475,26 +597,32 @@ function sheetXml(rows,widths,merges){
   if(merges&&merges.length)x+='<mergeCells count="'+merges.length+'">'+merges.map(function(m){return '<mergeCell ref="'+m+'"/>';}).join('')+'</mergeCells>';
   return x+'</worksheet>';
 }
+// ===== XLSX export: Cashflow V3 (Mark block, then Hannah block) + Pay Periods + Entries =====
 function buildXlsx(){
-  var v3=buildV3();
-  var c=compute(),H=function(v){return {v:v,t:'h'};};
-  var pr=[[H('Pay date'),H('Period start'),H('Period end'),H('Income'),H('Expenses'),H('Net'),H('Running savings'),H('Entries')]];
-  c.periods.forEach(function(p){pr.push([{v:p.pay,t:'d'},{v:p.pay,t:'d'},{v:p.end,t:'d'},{v:p.income,t:'m'},{v:p.expense,t:'m'},{v:p.net,t:'m'},{v:p.running,t:'m'},{v:p.entries.length,t:'n'}]);});
-  pr.push([]);pr.push([{v:'Starting balance',t:'s'},null,null,null,null,null,{v:state.settings.startingBalance,t:'m'}]);
-  pr.push([{v:'Pay frequency',t:'s'},{v:FREQ_LABEL[state.settings.frequency],t:'s'}]);
-  var er=[[H('Date'),H('Pay date'),H('Type'),H('Category'),H('Description'),H('Amount'),H('Signed amount'),H('Note')]];
-  state.entries.slice().sort(function(a,b){return a.date.localeCompare(b.date)||a.createdAt-b.createdAt;}).forEach(function(e){
-    er.push([{v:parse(e.date),t:'d'},{v:payDate(periodIndexFor(e.date)),t:'d'},{v:e.type==='income'?'Income':'Expense',t:'s'},{v:e.category,t:'s'},{v:e.description,t:'s'},{v:e.amount,t:'m'},{v:e.type==='income'?e.amount:-e.amount,t:'m'},{v:e.note||'',t:'s'}]);
-  });
+  var v3=buildV3(),H=function(v){return {v:v,t:'h'};},both=compute('both');
+  var pr=[[H('Person'),H('Pay date'),H('Period start'),H('Period end'),H('Income'),H('Expenses'),H('Net'),H('Running savings'),H('Combined savings'),H('Items')]];
+  both.periods.forEach(function(p){if(p.idx>both.per[p.person].maxIdx)return;
+    pr.push([{v:PNAME[p.person],t:'s'},{v:p.pay,t:'d'},{v:p.pay,t:'d'},{v:p.end,t:'d'},{v:p.income,t:'m'},{v:p.expense,t:'m'},{v:p.net,t:'m'},{v:p.running,t:'m'},{v:p.combined,t:'m'},{v:p.entries.length,t:'n'}]);});
+  pr.push([]);
+  PEOPLE.forEach(function(pid){var s=P(pid);
+    pr.push([{v:PNAME[pid],t:'s'},{v:'Opening balance',t:'s'},null,null,null,null,null,{v:s.startingBalance,t:'m'}]);
+    pr.push([{v:PNAME[pid],t:'s'},{v:'Pay schedule',t:'s'},{v:FREQ_LABEL[s.frequency]+' from '+s.firstPayDate+': '+s.payLabel+' '+money.format(s.payAmount)+(s.firstPayInOpening?' (first pay included in opening balance)':''),t:'s'}]);});
+  var er=[[H('Date'),H('Person'),H('Pay date'),H('Type'),H('Category'),H('Description'),H('Amount'),H('Note')]];
+  var rows=[];
+  PEOPLE.forEach(function(pid){var pc=computePerson(pid);pc.periods.forEach(function(p){if(p.idx>pc.maxIdx)return;p.entries.forEach(function(e){rows.push({e:e,pay:p.pay});});});});
+  rows.sort(function(a,b){return a.e.date.localeCompare(b.e.date)||PEOPLE.indexOf(a.e.person)-PEOPLE.indexOf(b.e.person)||(a.e.order||0)-(b.e.order||0);});
+  rows.forEach(function(x){var e=x.e;
+    // amounts are always positive; the Type column says whether it adds to or is subtracted from net
+    er.push([{v:parse(e.date),t:'d'},{v:PNAME[e.person],t:'s'},{v:x.pay,t:'d'},{v:e.type==='income'?(e.virtual?'Income (recurring)':'Income'):'Expense',t:'s'},{v:e.category,t:'s'},{v:e.description,t:'s'},{v:e.amount,t:'m'},{v:e.note||'',t:'s'}]);});
   var X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   return zip([
     {name:'[Content_Types].xml',data:X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
     {name:'_rels/.rels',data:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
     {name:'xl/workbook.xml',data:X+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Cashflow V3" sheetId="3" r:id="rId4"/><sheet name="Pay Periods" sheetId="1" r:id="rId1"/><sheet name="Entries" sheetId="2" r:id="rId2"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>'},
     {name:'xl/_rels/workbook.xml.rels',data:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>'},
-    {name:'xl/styles.xml',data:X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" formatCode="&quot;$&quot;#,##0.00;[Red]-&quot;$&quot;#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
-    {name:'xl/worksheets/sheet1.xml',data:sheetXml(pr,[13,13,13,13,13,13,16,9])},
-    {name:'xl/worksheets/sheet2.xml',data:sheetXml(er,[12,12,10,16,30,13,14,14])},
+    {name:'xl/styles.xml',data:X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" formatCode="&quot;$&quot;#,##0.00;[Red]&quot;$&quot;#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
+    {name:'xl/worksheets/sheet1.xml',data:sheetXml(pr,[10,13,13,13,13,13,13,16,16,8])},
+    {name:'xl/worksheets/sheet2.xml',data:sheetXml(er,[12,10,12,18,16,30,13,14])},
     {name:'xl/worksheets/sheet3.xml',data:v3.xml}
   ]);
 }
@@ -502,7 +630,67 @@ document.getElementById('btnXlsx').onclick=function(){
   var blob=buildXlsx(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cashflow-'+todayISO()+'.xlsx';
   document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},4000);toast('Excel file exported');
 };
-// ===================== Excel sync: import (unzip + XML parse) and Cashflow V3 export =====================
+function entrySection(e){return e.section||(e.type==='income'?'income':(e.category||'').toLowerCase()==='fixed'?'fixed':'variable');}
+var AC=function(i){return 5+2*i;};
+function buildV3(){
+  var grid={},merges=[],r=0,info={};function put(rr,col,cell){(grid[rr]=grid[rr]||{})[col]=cell;}
+  PEOPLE.forEach(function(pid,bi){
+    var pc=computePerson(pid),periods=pc.periods.slice(0,pc.maxIdx+1),s=P(pid);
+    var groups={start:[],income:[],fixed:[],variable:[]},byKey={};
+    state.entries.forEach(function(e){if(e.person!==pid)return;
+      var sec=entrySection(e);if(e.type==='income'&&(sec==='fixed'||sec==='variable'))sec='income'; // never write a negative into an expense row
+      var k=sec+'\u0000'+e.description;
+      if(!byKey[k]){byKey[k]={sec:sec,name:e.description,order:isFinite(e.order)?e.order:Infinity,created:e.createdAt,cells:{}};groups[sec].push(byKey[k]);}
+      var g=byKey[k];if(isFinite(e.order)&&e.order<g.order)g.order=e.order;if(e.createdAt<g.created)g.created=e.createdAt;
+      var pi=periodIndexFor(pid,e.date);(g.cells[pi]=g.cells[pi]||[]).push(e);
+    });
+    ['income','fixed','variable'].forEach(function(x){groups[x].sort(function(a,b){return a.order-b.order||a.created-b.created;});});
+    // value written into a V3 row: income rows hold income positive; expense rows hold expenses positive (never a minus sign for an expense)
+    function cellVal(e,sec){var incRow=sec==='start'||sec==='income';return (e.type==='income')===incRow?e.amount:-e.amount;}
+    function writeCells(row,list,sec,extra){
+      periods.forEach(function(p,i){
+        var es=list[i]||[],vals=es.map(function(e){return cellVal(e,sec);});
+        if(extra&&extra[i]){vals.unshift(extra[i]);es=[{amount:extra[i],type:'income'}].concat(es);}
+        if(!vals.length)return;
+        var sum=r6(vals.reduce(function(a,b){return a+b;},0));
+        var parts=es.map(function(e,j){var v=vals[j];return e.formula?(v<0?'-('+e.formula+')':(es.length>1?'('+e.formula+')':e.formula)):String(v);});
+        if(es.length===1&&!es[0].formula)put(row,AC(i),{v:sum,t:'m'});
+        else put(row,AC(i),{f:parts.join('+').replace(/\+-/g,'-'),v:sum,t:'f'});
+        var notes=es.map(function(e){return e.note;}).filter(Boolean);if(notes.length)put(row,AC(i)+1,{v:notes.join('; '),t:'s'});
+      });
+    }
+    r+=bi?3:1;var hdr=r;
+    put(hdr,0,{v:PNAME[pid],t:'b'});merges.push('A'+hdr+':E'+hdr);
+    periods.forEach(function(p,i){put(hdr,AC(i),{v:sheetLabel(iso(p.pay)),t:'b'});merges.push(A1(AC(i),hdr)+':'+A1(AC(i)+1,hdr));});
+    r++;var incStart=r;put(r,2,{v:'Starting balance',t:'s'});
+    var startCells={};groups.start.forEach(function(g){Object.keys(g.cells).forEach(function(pi){startCells[pi]=(startCells[pi]||[]).concat(g.cells[pi]);});});
+    writeCells(r,startCells,'start',s.startingBalance?{0:s.startingBalance}:null);
+    r++;put(r,2,{v:s.payLabel,t:'s'});
+    periods.forEach(function(p,i){if(p.payAmount>0)put(r,AC(i),{v:p.payAmount,t:'m'});});
+    groups.income.forEach(function(g){r++;put(r,2,{v:g.name,t:'s'});writeCells(r,g.cells,'income');});
+    var incEnd=r;
+    r+=2;put(r,2,{v:'Expenses',t:'s'});
+    r++;put(r,3,{v:'Fixed',t:'s'});var expStart=r;
+    groups.fixed.forEach(function(g){r++;put(r,4,{v:g.name,t:'s'});writeCells(r,g.cells,'fixed');});
+    r+=2;put(r,3,{v:'Variable',t:'s'});
+    groups.variable.forEach(function(g){r++;put(r,4,{v:g.name,t:'s'});writeCells(r,g.cells,'variable');});
+    var expEnd=r;r+=2;var netR=r,runR=r+2;r=runR;
+    put(netR,4,{v:'Net',t:'b'});put(runR,4,{v:'Running savings',t:'b'});
+    var run=0;
+    periods.forEach(function(p,i){
+      var L=colName(AC(i)),inc=0,exp=0;
+      for(var rr=incStart;rr<=expEnd;rr++){var cell=grid[rr]&&grid[rr][AC(i)];if(cell&&typeof cell.v==='number'){if(rr<=incEnd)inc+=cell.v;else exp+=cell.v;}}
+      var net=r6(inc-exp);run=r6(run+net);
+      put(netR,AC(i),{f:'SUM('+L+incStart+':'+L+incEnd+')-SUM('+L+expStart+':'+L+expEnd+')',v:net,t:'f'});
+      put(runR,AC(i),{f:i===0?L+netR:colName(AC(i-1))+runR+'+'+L+netR,v:run,t:'f'});
+    });
+    info[pid]={header:hdr,netRow:netR,runRow:runR,cols:periods.length};
+  });
+  var rowsArr=[],maxC=0;
+  for(var y=1;y<=r;y++){var row=[];var g=grid[y]||{};var mc=Math.max.apply(null,[-1].concat(Object.keys(g).map(Number)));for(var x=0;x<=mc;x++)row.push(g[x]||null);rowsArr.push(row);if(mc>maxC)maxC=mc;}
+  var widths=[8,4,18,4,22];for(var c=5;c<=maxC;c+=2)widths.push(13,10);
+  return {xml:sheetXml(rowsArr,widths,merges),info:info};
+}
 var MON=['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.'];
 function sheetLabel(isoD){var d=new Date(parse(isoD));return MON[d.getUTCMonth()]+' '+d.getUTCDate()+', '+d.getUTCFullYear();}
 var MONIDX={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
@@ -569,23 +757,18 @@ function guessFrequency(dates){
   var d0=new Date(ts[0]).getUTCDate();if(dates.every(function(d){return new Date(parse(d)).getUTCDate()===d0;}))return 'monthly';
   return null;
 }
-function parseBlock(grid,sheetName){
-  var rows=Object.keys(grid).map(Number).sort(function(a,b){return a-b;});
-  function headerDates(r){var out=[];Object.keys(grid[r]).map(Number).sort(function(a,b){return a-b;}).forEach(function(c){var cell=grid[r][c];var d=c>=1?parseDateLabel(cell.v):null;if(d)out.push({col:c,iso:d,label:String(cell.v).trim()});});return out;}
-  var headers=rows.map(function(r){return {row:r,dates:headerDates(r)};}).filter(function(h){return h.dates.length>0;});
-  if(!headers.length)return null;
-  var h=headers[0],endRow=headers[1]?headers[1].row-1:rows[rows.length-1],firstCol=h.dates[0].col;
-  var res={sheet:sheetName,headerRow:h.row,payDates:h.dates.map(function(d){return d.iso;}),labels:h.dates.map(function(d){return d.label;}),
-    startingBalance:0,entries:[],unmapped:[],netRow:null,owner:'',otherBlocks:[]};
-  Object.keys(grid[h.row]).forEach(function(c){c=+c;if(c<firstCol&&typeof grid[h.row][c].v==='string')res.owner=grid[h.row][c].v.trim();});
-  headers.slice(1).forEach(function(o,i){var lbl='';Object.keys(grid[o.row]).forEach(function(c){if(+c<o.dates[0].col&&typeof grid[o.row][c].v==='string')lbl=grid[o.row][c].v;});
-    var nextRow=headers[i+2]?headers[i+2].row-1:rows[rows.length-1];
-    res.otherBlocks.push({label:lbl,rows:o.row+'–'+nextRow,payDates:o.dates.map(function(d){return d.label;})});});
+var PAY_RE=/^(pay|paycheque|paycheck|salary|wages?|income)\b/i;
+function rowLabel(row,firstCol){var label='',lc=-1;Object.keys(row).map(Number).forEach(function(c){if(c<firstCol&&typeof row[c].v==='string'&&row[c].v.trim()&&c>lc){label=row[c].v.trim();lc=c;}});return label;}
+// one person block: header row with pay-date labels, then Starting balance / income rows, Expenses (Fixed / Variable), Net
+function parseBlock(grid,rows,h,endRow){
+  var firstCol=h.dates[0].col;
+  var res={headerRow:h.row,endRow:endRow,payDates:h.dates.map(function(d){return d.iso;}),labels:h.dates.map(function(d){return d.label;}),
+    startingBalance:0,startExtras:[],payCells:[],payLabel:'',payRow:null,entries:[],unmapped:[],owner:''};
+  Object.keys(grid[h.row]).map(Number).sort(function(a,b){return a-b;}).forEach(function(c){if(c<firstCol&&!res.owner&&typeof grid[h.row][c].v==='string')res.owner=grid[h.row][c].v.trim();});
   var mode='income',sub='fixed',stopped=false,sawStart=false;
   rows.forEach(function(r){
     if(r<=h.row||r>endRow||stopped)return;
-    var row=grid[r],label='',labelCol=-1;
-    Object.keys(row).map(Number).forEach(function(c){if(c<firstCol&&typeof row[c].v==='string'&&row[c].v.trim()&&c>labelCol){label=row[c].v.trim();labelCol=c;}});
+    var row=grid[r],label=rowLabel(row,firstCol);
     var key=label.toLowerCase().replace(/[:\s]+$/,'');
     var amounts=h.dates.map(function(d){return {d:d,cell:row[d.col],noteCell:row[d.col+1]};});
     var hasNum=amounts.some(function(a){return a.cell&&typeof a.cell.v==='number'&&a.cell.v!==0;});
@@ -595,6 +778,7 @@ function parseBlock(grid,sheetName){
     if(mode==='expense'&&(key==='fixed'||key==='variable')&&!hasNum){sub=key;return;}
     var section=key==='starting balance'?'start':mode==='income'?'income':sub;
     if(section==='start')sawStart=true;
+    var isPay=false;if(section==='income'&&res.payRow===null&&PAY_RE.test(label)){res.payRow=r;res.payLabel=label;isPay=true;}
     amounts.forEach(function(a,i){
       var cell=a.cell,note=a.noteCell&&a.noteCell.v!=null&&a.noteCell.v!==''?String(a.noteCell.v).trim():'';
       var where=A1(a.d.col,r);
@@ -604,18 +788,45 @@ function parseBlock(grid,sheetName){
       if(typeof cell.v!=='number'){res.unmapped.push(where+': text "'+cell.v+'" is not an amount');return;}
       var v=cell.v;if(v===0){if(note)res.unmapped.push(A1(a.d.col+1,r)+': note "'+note+'" on "'+label+'" has a $0 amount for '+a.d.label);return;}
       if(section==='start'&&i===0){res.startingBalance=r6(v);if(note)res.unmapped.push(A1(a.d.col+1,r)+': note on starting balance "'+note+'"');return;}
+      if(section==='start'){res.startExtras.push({colDate:a.d.iso,v:r6(v),order:r,note:note});return;}
+      if(isPay){res.payCells.push({colDate:a.d.iso,v:r6(v)});if(note)res.unmapped.push(A1(a.d.col+1,r)+': note on recurring income "'+note+'"');return;}
       if(!label){res.unmapped.push(where+': amount '+v+' has no item name');return;}
-      var isIncomeSec=section==='start'||section==='income';
-      var e={type:(isIncomeSec?v>0:v<0)?'income':'expense',amount:r6(Math.abs(v)),description:label,
-        category:isIncomeSec?'Income':section==='fixed'?'Fixed':'Variable',date:a.d.iso,section:section,order:r,source:'xlsx'};
+      // income rows: a negative value is money out. Expense rows: either sign means an expense (stored positive).
+      var type=section==='income'?(v>0?'income':'expense'):'expense';
+      var e={type:type,amount:r6(Math.abs(v)),description:label,category:section==='income'?'Income':section==='fixed'?'Fixed':'Variable',colDate:a.d.iso,section:section,order:r,source:'xlsx'};
       if(note)e.note=note;
-      var f=cell.f&&cell.f.replace(/^=/,'').trim();if(f&&/^[\d.+\-*\/() ]+$/.test(f)&&/[+\-*\/]/.test(f))e.formula=f;
+      var f=cell.f&&cell.f.replace(/^=/,'').trim();if(f&&/^[\d.+\-*\/() ]+$/.test(f)&&/[+\-*\/]/.test(f))e.formula=f.replace(/^-\((.*)\)$/,'$1').replace(/^-/,'');
       res.entries.push(e);
     });
   });
-  if(!sawStart&&!res.entries.length)return null;
+  // the old Mark layout carries each later paycheque in the "Starting balance" row: that becomes the recurring pay
+  if(res.payRow===null&&res.startExtras.length){res.payCells=res.startExtras.map(function(x){return {colDate:x.colDate,v:x.v};});res.payFromStart=true;res.payLabel='';}
+  else res.startExtras.forEach(function(x){var e={type:x.v>0?'income':'expense',amount:Math.abs(x.v),description:'Starting balance',category:'Income',colDate:x.colDate,section:'start',order:x.order,source:'xlsx'};if(x.note)e.note=x.note;res.entries.push(e);});
+  delete res.startExtras;
+  if(!sawStart&&!res.entries.length&&!res.payCells.length)return null;
   res.frequency=guessFrequency(res.payDates);
   return res;
+}
+function personFromLabel(s){s=String(s||'').trim().toLowerCase();for(var i=0;i<PEOPLE.length;i++)if(s===PEOPLE[i]||s.indexOf(PNAME[PEOPLE[i]].toLowerCase())===0)return PEOPLE[i];return null;}
+function parseSheet(grid,sheetName){
+  var rows=Object.keys(grid).map(Number).sort(function(a,b){return a-b;});
+  function headerDates(r){var out=[];Object.keys(grid[r]).map(Number).sort(function(a,b){return a-b;}).forEach(function(c){var cell=grid[r][c];var d=c>=1?parseDateLabel(cell.v):null;if(d)out.push({col:c,iso:d,label:String(cell.v).trim()});});return out;}
+  var headers=rows.map(function(r){return {row:r,dates:headerDates(r)};}).filter(function(h){return h.dates.length>0;});
+  // person labels in column A ("Mark", "Hannah"): a block starts at the first pay-date row on or after the label
+  var nameRows=rows.filter(function(r){return grid[r][0]&&personFromLabel(grid[r][0].v);}).map(function(r){return {row:r,person:personFromLabel(grid[r][0].v)};});
+  var blocks=[],other=[],used={};
+  headers.forEach(function(h,i){
+    var end=headers[i+1]?headers[i+1].row-1:rows[rows.length-1];
+    var b=parseBlock(grid,rows,h,end);if(!b)return;
+    var prevEnd=i?headers[i-1].row:0,nm=nameRows.filter(function(n){return n.row<=h.row&&n.row>prevEnd;}).pop();
+    var pid=nm?nm.person:personFromLabel(b.owner);
+    if(!pid)pid=PEOPLE.filter(function(p){return !used[p];})[0];
+    b.rows=h.row+'–'+(b.netRow?b.netRow+2:end);
+    if(!pid||used[pid]){other.push({label:b.owner||'another section',rows:b.rows});return;}
+    used[pid]=true;b.person=pid;blocks.push(b);
+  });
+  if(!blocks.length)return null;
+  return {sheet:sheetName,blocks:blocks,otherBlocks:other};
 }
 function parseXlsx(buf){
   var files;try{files=unzip(buf);}catch(e){return Promise.reject(e);}
@@ -627,30 +838,50 @@ function parseXlsx(buf){
     if(t[2])shared=tags(xmlDoc(t[2]),'si').map(textOf);
     var sheets=tags(wb,'sheet').map(function(s){return {name:s.getAttribute('name'),path:rels[s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||s.getAttribute('r:id')]};});
     var pref=sheets.filter(function(s){return s.name.trim().toLowerCase()==='cashflow v3';}).concat(sheets.filter(function(s){return s.name.trim().toLowerCase()!=='cashflow v3';}));
-    // try 'Cashflow V3' first, then any other sheet with the same layout
     var i=0;
     function next(){
       if(i>=pref.length)throw new Error('No sheet with the Cashflow V3 layout (pay-date labels like "Oct. 15, 2026" across a row) was found');
       var s=pref[i++];
-      return inflateText(files[s.path]).then(function(x){if(!x)return next();var r=parseBlock(readGrid(x,shared),s.name);if(r&&r.payDates.length&&(r.entries.length||r.startingBalance))return r;return next();});
+      return inflateText(files[s.path]).then(function(x){if(!x)return next();var r=parseSheet(readGrid(x,shared),s.name);return r||next();});
     }
     return next();
   });
 }
-function entryKeyMerge(e){return e.date+'\u0000'+e.description.trim().toLowerCase()+'\u0000'+(e.section||e.type);}
+function entryKeyMerge(e){return e.person+'\u0000'+e.date+'\u0000'+e.description.trim().toLowerCase()+'\u0000'+(e.section||e.type);}
+// place one sheet block onto a person's own pay schedule
+function mapBlock(b){
+  var pid=b.person,s=P(pid),sums={},snapped={};
+  b.payDates.forEach(function(d){snapped[d]=snapDate(pid,d);});
+  b.payCells.forEach(function(c){var pd=snapped[c.colDate];sums[pd]=r6((sums[pd]||0)+c.v);});
+  var entries=b.entries.map(function(e){var o=Object.assign({},e,{person:pid,date:snapped[e.colDate]});delete o.colDate;return o;});
+  var first=b.payDates[0],last=b.payDates[b.payDates.length-1];
+  return {pid:pid,sums:sums,entries:entries,firstIdx:periodIndexFor(pid,first),lastIdx:periodIndexFor(pid,last),horizon:snapped[last],
+    payAmount:b.payCells.length?r6(modeOf(Object.keys(sums).map(function(k){return sums[k];}))):null,
+    colMap:b.payDates.map(function(d){return [d,snapped[d]];})};
+}
 function applyImport(res,mode){
-  var now=Date.now();
-  var incoming=res.entries.map(function(e,i){return Object.assign({id:uid(),createdAt:now+i},e);});
-  if(mode==='replace')state.entries=incoming;
-  else{
-    var idx={};state.entries.forEach(function(e,i){idx[entryKeyMerge(e)]=i;});
-    incoming.forEach(function(e){var k=entryKeyMerge(e);
-      if(idx[k]!==undefined){var old=state.entries[idx[k]];state.entries[idx[k]]=Object.assign({},old,e,{id:old.id,createdAt:old.createdAt});if(!e.formula)delete state.entries[idx[k]].formula;if(!e.note)delete state.entries[idx[k]].note;}
-      else{idx[k]=state.entries.length;state.entries.push(e);}});
-  }
-  state.settings.startingBalance=res.startingBalance||0;
-  if(res.payDates.length)state.settings.firstPayDate=res.payDates[0];
-  if(res.frequency)state.settings.frequency=res.frequency;
+  var now=Date.now(),n=0;
+  res.blocks.forEach(function(b){
+    var m=mapBlock(b),s=P(m.pid);
+    s.startingBalance=b.startingBalance||0;
+    if(b.payLabel)s.payLabel=b.payLabel;
+    if(m.payAmount!=null){
+      s.payAmount=m.payAmount;
+      var p0=iso(payDate(m.pid,0));
+      s.firstPayInOpening=m.firstIdx===0&&s.startingBalance!==0&&!m.sums[p0];
+      if(mode==='replace')s.payOverrides={};
+      for(var i=m.firstIdx;i<=m.lastIdx;i++){var pd=iso(payDate(m.pid,i)),act=m.sums[pd]||0;delete s.payOverrides[pd];if(Math.abs(act-defaultPayFor(m.pid,i))>1e-9)s.payOverrides[pd]=act;}
+    }
+    s.horizon=mode==='merge'&&s.horizon>m.horizon?s.horizon:m.horizon;
+    var incoming=m.entries.map(function(e,i){return Object.assign({id:uid(),createdAt:now+(n++)},e);});
+    if(mode==='replace')state.entries=state.entries.filter(function(e){return e.person!==m.pid;}).concat(incoming);
+    else{
+      var idx={};state.entries.forEach(function(e,i){idx[entryKeyMerge(e)]=i;});
+      incoming.forEach(function(e){var k=entryKeyMerge(e);
+        if(idx[k]!==undefined){var old=state.entries[idx[k]];state.entries[idx[k]]=Object.assign({},old,e,{id:old.id,createdAt:old.createdAt});if(!e.formula)delete state.entries[idx[k]].formula;if(!e.note)delete state.entries[idx[k]].note;}
+        else{idx[k]=state.entries.length;state.entries.push(e);}});
+    }
+  });
   state=normalize(state);save();openSet={};render();
 }
 var pendingImport=null;
@@ -659,80 +890,30 @@ document.getElementById('xlsxFile').onchange=function(ev){
   var f=ev.target.files[0];ev.target.value='';if(!f)return;
   f.arrayBuffer().then(parseXlsx).then(function(res){
     pendingImport=res;
-    var inc=0,exp=0;res.entries.forEach(function(e){if(e.type==='income')inc+=e.amount;else exp+=e.amount;});
-    var h='<b>Sheet “'+esc(res.sheet)+'”</b>'+(res.owner?' ('+esc(res.owner)+')':'')+'<br>'+res.payDates.length+' pay dates: '+esc(res.labels[0])+' – '+esc(res.labels[res.labels.length-1])+
-      '<br>'+res.entries.length+' items · starting balance '+money.format(res.startingBalance)+
-      '<br>Pay schedule: '+(res.frequency?FREQ_LABEL[res.frequency]:'not detected (kept current)');
-    if(res.otherBlocks.length)h+='<br><span class="sub">Not imported: '+res.otherBlocks.map(function(b){return esc(b.label||'another section')+' (rows '+b.rows+')';}).join(', ')+'</span>';
-    if(res.unmapped.length)h+='<details style="margin-top:6px"><summary>'+res.unmapped.length+' cell(s) skipped</summary><div class="sub">'+res.unmapped.map(esc).join('<br>')+'</div></details>';
+    var h='<b>Sheet “'+esc(res.sheet)+'”</b>',unm=[];
+    res.blocks.forEach(function(b){
+      var m=mapBlock(b),s=P(b.person),moved=m.colMap.filter(function(x){return x[0]!==x[1];}).length;
+      h+='<div style="margin-top:8px" data-block="'+b.person+'">'+who(b.person)+' rows '+esc(b.rows)+'<br>'+b.payDates.length+' sheet dates: '+esc(b.labels[0])+' – '+esc(b.labels[b.labels.length-1])+(b.frequency?' ('+FREQ_LABEL[b.frequency]+')':'')+
+        '<br>'+b.entries.length+' items · opening balance '+money.format(b.startingBalance)+
+        (m.payAmount!=null?'<br>Recurring income '+money.format(m.payAmount)+' ('+esc(b.payFromStart?'from the later "Starting balance" cells':'“'+b.payLabel+'”')+')':'')+
+        '<br>Placed on '+PNAME[b.person]+'’s '+FREQ_LABEL[s.frequency]+' pay dates'+(moved?' — '+moved+' column(s) moved to the pay date on or before them':'')+'</div>';
+      b.unmapped.forEach(function(u){unm.push(PNAME[b.person]+' '+u);});
+    });
+    if(res.otherBlocks.length)h+='<br><span class="sub">Not imported: '+res.otherBlocks.map(function(b){return esc(b.label)+' (rows '+b.rows+')';}).join(', ')+'</span>';
+    if(unm.length)h+='<details style="margin-top:6px"><summary>'+unm.length+' cell(s) skipped</summary><div class="sub">'+unm.map(esc).join('<br>')+'</div></details>';
     document.getElementById('xlSummary').innerHTML=h;
     hide(setOv);show(xlOv);
   }).catch(function(err){toast(err&&err.message?err.message:'Could not read that Excel file');});
 };
-document.getElementById('xlReplace').onclick=function(){if(!pendingImport)return;var n=pendingImport.entries.length;applyImport(pendingImport,'replace');pendingImport=null;hide(xlOv);toast('Imported '+n+' items');};
-document.getElementById('xlMerge').onclick=function(){if(!pendingImport)return;var n=pendingImport.entries.length;applyImport(pendingImport,'merge');pendingImport=null;hide(xlOv);toast('Merged '+n+' items');};
-
-function entrySection(e){return e.section||(e.type==='income'?'income':(e.category||'').toLowerCase()==='fixed'?'fixed':'variable');}
-function buildV3(){
-  var c=compute(),np=c.maxIdx+1,periods=c.periods.slice(0,np);
-  var groups={start:[],income:[],fixed:[],variable:[]},byKey={};
-  state.entries.forEach(function(e){
-    var sec=entrySection(e),k=sec+'\u0000'+e.description;
-    if(!byKey[k]){byKey[k]={sec:sec,name:e.description,order:isFinite(e.order)?e.order:Infinity,created:e.createdAt,cells:{}};if(sec!=='start')groups[sec].push(byKey[k]);}
-    var g=byKey[k];if(isFinite(e.order)&&e.order<g.order)g.order=e.order;if(e.createdAt<g.created)g.created=e.createdAt;
-    var pi=periodIndexFor(e.date);(g.cells[pi]=g.cells[pi]||[]).push(e);
-  });
-  ['income','fixed','variable'].forEach(function(s){groups[s].sort(function(a,b){return a.order-b.order||a.created-b.created;});});
-  var grid={},merges=[];function put(r,col,cell){(grid[r]=grid[r]||{})[col]=cell;}
-  var AC=function(i){return 5+2*i;};
-  put(1,0,{v:'Mark',t:'b'});merges.push('A1:E1');
-  periods.forEach(function(p,i){put(1,AC(i),{v:sheetLabel(iso(p.pay)),t:'b'});merges.push(A1(AC(i),1)+':'+A1(AC(i)+1,1));});
-  function signed(e,sec){var inc=sec==='start'||sec==='income';return (e.type==='income')===inc?e.amount:-e.amount;}
-  function writeCells(r,list,sec,extra){
-    periods.forEach(function(p,i){
-      var es=list[i]||[],vals=es.map(function(e){return signed(e,sec);});
-      if(extra&&i===0&&extra.v!==0){vals.unshift(extra.v);es=[{formula:null,amount:extra.v,type:'income'}].concat(es);}
-      if(!vals.length)return;
-      var sum=r6(vals.reduce(function(a,b){return a+b;},0));
-      var parts=es.map(function(e,j){var v=vals[j];return e.formula?(v<0?'-('+e.formula+')':(es.length>1?'('+e.formula+')':e.formula)):String(v);});
-      if(es.length===1&&!es[0].formula)put(r,AC(i),{v:sum,t:'m'});
-      else put(r,AC(i),{f:parts.join('+').replace(/\+-/g,'-'),v:sum,t:'f'});
-      var notes=es.map(function(e){return e.note;}).filter(Boolean);if(notes.length)put(r,AC(i)+1,{v:notes.join('; '),t:'s'});
-    });
-  }
-  var r=2,cached={};
-  put(r,2,{v:'Starting balance',t:'s'});
-  var startG=byKey['start\u0000Starting balance']||{cells:{}};
-  // any other start-section rows (different name) are merged into the starting balance row
-  Object.keys(byKey).forEach(function(k){var g=byKey[k];if(g.sec==='start'&&g!==startG)Object.keys(g.cells).forEach(function(pi){startG.cells[pi]=(startG.cells[pi]||[]).concat(g.cells[pi]);});});
-  writeCells(r,startG.cells,'start',{v:state.settings.startingBalance});
-  groups.income.forEach(function(g){r++;put(r,2,{v:g.name,t:'s'});writeCells(r,g.cells,'income');});
-  var incEnd=r;
-  r+=2;put(r,2,{v:'Expenses',t:'s'});
-  r++;put(r,3,{v:'Fixed',t:'s'});var expStart=r;
-  groups.fixed.forEach(function(g){r++;put(r,4,{v:g.name,t:'s'});writeCells(r,g.cells,'fixed');});
-  r+=2;put(r,3,{v:'Variable',t:'s'});
-  groups.variable.forEach(function(g){r++;put(r,4,{v:g.name,t:'s'});writeCells(r,g.cells,'variable');});
-  var expEnd=r;r+=2;var netR=r,runR=r+2;
-  put(netR,4,{v:'Net',t:'b'});put(runR,4,{v:'Running savings',t:'b'});
-  var run=0;
-  periods.forEach(function(p,i){
-    var L=colName(AC(i)),inc=0,exp=0;
-    for(var rr=2;rr<=expEnd;rr++){var cell=grid[rr]&&grid[rr][AC(i)];if(cell&&typeof cell.v==='number'){if(rr<=incEnd)inc+=cell.v;else exp+=cell.v;}}
-    var net=r6(inc-exp);run=r6(run+net);
-    put(netR,AC(i),{f:'SUM('+L+'2:'+L+incEnd+')-SUM('+L+expStart+':'+L+expEnd+')',v:net,t:'f'});
-    put(runR,AC(i),{f:i===0?L+netR:colName(AC(i-1))+runR+'+'+L+netR,v:run,t:'f'});
-  });
-  var maxR=runR,rowsArr=[];
-  for(var y=1;y<=maxR;y++){var row=[];var g=grid[y]||{};var mc=Math.max.apply(null,[-1].concat(Object.keys(g).map(Number)));for(var x=0;x<=mc;x++)row.push(g[x]||null);rowsArr.push(row);}
-  var widths=[8,4,18,4,22];periods.forEach(function(){widths.push(13,10);});
-  return {xml:sheetXml(rowsArr,widths,merges),netRow:netR,runRow:runR};
-}
+function countItems(r){return r.blocks.reduce(function(a,b){return a+b.entries.length;},0);}
+document.getElementById('xlReplace').onclick=function(){if(!pendingImport)return;var n=countItems(pendingImport);applyImport(pendingImport,'replace');pendingImport=null;hide(xlOv);toast('Imported '+n+' items');};
+document.getElementById('xlMerge').onclick=function(){if(!pendingImport)return;var n=countItems(pendingImport);applyImport(pendingImport,'merge');pendingImport=null;hide(xlOv);toast('Merged '+n+' items');};
 
 var tt;function toast(m){var t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(function(){t.style.display='none';},1800);}
-window.addEventListener('storage',function(e){if(e.key===KEY){state=load();render();}});
+window.addEventListener('storage',function(e){if(e.key===KEY){state=load();render();}if(e.key===FKEY&&e.newValue){filter=e.newValue;render();}});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)render();});
-window.__cashflow={parseXlsx:parseXlsx,applyImport:applyImport,buildXlsx:buildXlsx,compute:compute,payDate:function(n){return iso(payDate(n));},periodIndexFor:periodIndexFor,state:function(){return state;}};
+window.__cashflow={parseXlsx:parseXlsx,applyImport:applyImport,buildXlsx:buildXlsx,compute:compute,computePerson:computePerson,exportJson:exportJson,setFilter:setFilter,
+  payDate:function(pid,n){return iso(payDate(pid,n));},periodIndexFor:periodIndexFor,state:function(){return state;},filter:function(){return filter;}};
 render();
 })();
 </script>
